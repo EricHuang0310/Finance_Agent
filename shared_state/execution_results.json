@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-02-18T01:12:55.015397",
+  "total_approved": 5,
+  "total_executed": 5,
+  "trades": [
+    {
+      "symbol": "CRM",
+      "side": "sell",
+      "qty": 53,
+      "entry_price": 184.89,
+      "order_id": "508f080e-9231-4085-ade5-347fa589efbc",
+      "order_status": "pending_new"
+    },
+    {
+      "symbol": "NFLX",
+      "side": "sell",
+      "qty": 129,
+      "entry_price": 76.34,
+      "order_id": "6c32c97a-099c-443c-8e85-41b53f962c3e",
+      "order_status": "pending_new"
+    },
+    {
+      "symbol": "RBLX",
+      "side": "sell",
+      "qty": 155,
+      "entry_price": 63.76,
+      "order_id": "42c85e85-7722-4dc8-b958-fcf4eb0a3f65",
+      "order_status": "pending_new"
+    },
+    {
+      "symbol": "EOG",
+      "side": "buy",
+      "qty": 83,
+      "entry_price": 118.95,
+      "order_id": "295a6b57-32ea-4ee5-98f7-e3af51f21835",
+      "order_status": "pending_new"
+    },
+    {
+      "symbol": "AMAT",
+      "side": "buy",
+      "qty": 27,
+      "entry_price": 358.96,
+      "order_id": "f2d8746a-9288-4955-a827-a413cdbdadfe",
+      "order_status": "pending_new"
+    }
+  ]
+}

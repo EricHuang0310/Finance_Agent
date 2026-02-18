@@ -1,0 +1,82 @@
+# Multi-Agent Trading System Configuration
+
+# Trading strategy: momentum (trend-following, short-to-medium term)
+strategy: momentum
+
+# Watchlist mode: "static" uses the list below, "dynamic" uses the screener agent
+watchlist_mode: dynamic    # static | dynamic
+
+# Static watchlist - used when watchlist_mode is "static"
+watchlist:
+  stocks:
+    - AAPL
+    - MSFT
+    - NVDA
+    - GOOGL
+    - AMZN
+    - META
+    - TSLA
+    - TSM
+    - JPM
+    - V
+    - BAC
+    - C
+    - WFC
+    - JNJ
+    - CVX
+    - XOM
+    - MCD
+    - VZ
+    - DIS
+    - CMCSA
+    - MMM
+    - MU
+    - COST
+    - ONDS
+    - SNDK
+    - CRWV
+    - NFLX
+    - WMT
+    - MSTR
+    - COIN
+    - AMD
+    - MRVL
+    - AVGO
+    - PLTR
+    - LITE
+  crypto:
+    - BTC/USD
+    - ETH/USD
+
+# Symbol Screener settings - used when watchlist_mode is "dynamic"
+screener:
+  max_stocks: 20              # Max stock symbols to select
+  max_crypto: 5               # Max crypto pairs to select
+  min_price: 5.0              # Minimum stock price ($)
+  max_price: 1000.0           # Maximum stock price ($)
+  min_avg_volume: 500000      # Minimum 20-day average volume
+  lookback_days: 20           # Days of data for screening metrics
+
+# Scoring weights for signal aggregation
+scoring:
+  technical_analyst: 0.35
+  market_analyst: 0.20
+  sentiment_analyst: 0.15
+  risk_manager: 0.30
+
+# Decision engine settings
+decision:
+  min_score_to_buy: 0.3
+  min_score_to_sell: 0.3
+  require_human_confirm: false
+
+# Risk management constraints
+risk:
+  max_position_pct: 10        # Max single position as % of portfolio
+  max_exposure_pct: 60        # Max total exposure as % of portfolio
+  max_positions: 8            # Max simultaneous positions
+  daily_loss_limit_pct: 2     # Daily loss limit %
+  kill_switch_pct: 3          # Kill switch trigger %
+  max_drawdown_pct: 10        # Max drawdown from peak %
+  min_risk_reward: 1.5        # Minimum risk-reward ratio
+

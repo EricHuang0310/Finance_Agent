@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-02-18T01:12:39.014620",
+  "summary": {
+    "equity": 99120.66,
+    "cash": 60172.38,
+    "current_exposure_pct": 39.29,
+    "max_exposure_pct": 60.0,
+    "daily_pnl_pct": 0.3,
+    "position_count": 4,
+    "max_positions": 8,
+    "kill_switch_active": false,
+    "daily_limit_hit": false
+  },
+  "assessments": [
+    {
+      "symbol": "HOOD",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4996471418489765,
+      "position_size_pct": 0
+    },
+    {
+      "symbol": "CRM",
+      "approved": true,
+      "reason": "Approved: 53 shares (short), R:R=1.50",
+      "suggested_qty": 53,
+      "risk_reward_ratio": 1.5,
+      "position_size_pct": 9.89
+    },
+    {
+      "symbol": "NFLX",
+      "approved": true,
+      "reason": "Approved: 129 shares (short), R:R=1.50",
+      "suggested_qty": 129,
+      "risk_reward_ratio": 1.5,
+      "position_size_pct": 9.94
+    },
+    {
+      "symbol": "TMO",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4998621450234355,
+      "position_size_pct": 0
+    },
+    {
+      "symbol": "PLTR",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4997437211686295,
+      "position_size_pct": 0
+    },
+    {
+      "symbol": "SOFI",
+      "approved": false,
+      "reason": "R:R 1.49 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4929577464788735,
+      "position_size_pct": 0
+    },
+    {
+      "symbol": "RBLX",
+      "approved": true,
+      "reason": "Approved: 155 shares (short), R:R=1.50",
+      "suggested_qty": 155,
+      "risk_reward_ratio": 1.5,
+      "position_size_pct": 9.97
+    },
+    {
+      "symbol": "EOG",
+      "approved": true,
+      "reason": "Approved: 83 shares, R:R=1.50",
+      "suggested_qty": 83,
+      "risk_reward_ratio": 1.5,
+      "position_size_pct": 9.96
+    },
+    {
+      "symbol": "SCHW",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.499999999999999,
+      "position_size_pct": 0
+    },
+    {
+      "symbol": "AMD",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4998334998335006,
+      "position_size_pct": 0
+    },
+    {
+      "symbol": "AMAT",
+      "approved": true,
+      "reason": "Approved: 27 shares, R:R=1.50",
+      "suggested_qty": 27,
+      "risk_reward_ratio": 1.5,
+      "position_size_pct": 9.78
+    },
+    {
+      "symbol": "SNPS",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4998865955999081,
+      "position_size_pct": 0
+    }
+  ]
+}

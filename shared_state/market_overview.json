@@ -1,0 +1,232 @@
+{
+  "stocks": {
+    "HOOD": {
+      "bars_count": 59,
+      "latest_close": 74.942,
+      "latest_volume": 17006050,
+      "high_90d": 139.75,
+      "low_90d": 70.43,
+      "avg_volume_20d": 36068948,
+      "market_score": -0.4675
+    },
+    "RBLX": {
+      "bars_count": 59,
+      "latest_close": 63.76,
+      "latest_volume": 3652985,
+      "high_90d": 99.98,
+      "low_90d": 60.07,
+      "avg_volume_20d": 14705264,
+      "market_score": -0.4538
+    },
+    "AMAT": {
+      "bars_count": 59,
+      "latest_close": 358.965,
+      "latest_volume": 3373971,
+      "high_90d": 376.32,
+      "low_90d": 215.495,
+      "avg_volume_20d": 8395901,
+      "market_score": -0.054
+    },
+    "SMCI": {
+      "bars_count": 59,
+      "latest_close": 30.2897,
+      "latest_volume": 9937434,
+      "high_90d": 35.88,
+      "low_90d": 27.75,
+      "avg_volume_20d": 34592644,
+      "market_score": -0.3438
+    },
+    "MU": {
+      "bars_count": 59,
+      "latest_close": 405.93,
+      "latest_volume": 15541148,
+      "high_90d": 455.5,
+      "low_90d": 192.59,
+      "avg_volume_20d": 40395546,
+      "market_score": -0.0943
+    },
+    "SOFI": {
+      "bars_count": 59,
+      "latest_close": 19.625,
+      "latest_volume": 24014594,
+      "high_90d": 30.42,
+      "low_90d": 19.04,
+      "avg_volume_20d": 59014910,
+      "market_score": -0.4743
+    },
+    "PLTR": {
+      "bars_count": 59,
+      "latest_close": 131.45,
+      "latest_volume": 23238681,
+      "high_90d": 198.88,
+      "low_90d": 126.2325,
+      "avg_volume_20d": 55690216,
+      "market_score": -0.4641
+    },
+    "C": {
+      "bars_count": 59,
+      "latest_close": 113.523,
+      "latest_volume": 4284313,
+      "high_90d": 125.16,
+      "low_90d": 95.8301,
+      "avg_volume_20d": 13628042,
+      "market_score": -0.1984
+    },
+    "AMD": {
+      "bars_count": 59,
+      "latest_close": 202.24,
+      "latest_volume": 19155643,
+      "high_90d": 266.96,
+      "low_90d": 190.72,
+      "avg_volume_20d": 41779620,
+      "market_score": -0.4244
+    },
+    "UNH": {
+      "bars_count": 59,
+      "latest_close": 292.55,
+      "latest_volume": 2724610,
+      "high_90d": 357.87,
+      "low_90d": 266.29,
+      "avg_volume_20d": 13128681,
+      "market_score": -0.3566
+    },
+    "NFLX": {
+      "bars_count": 59,
+      "latest_close": 76.34,
+      "latest_volume": 20230416,
+      "high_90d": 111.1,
+      "low_90d": 75.23,
+      "avg_volume_20d": 53983233,
+      "market_score": -0.4845
+    },
+    "SCHW": {
+      "bars_count": 59,
+      "latest_close": 93.08,
+      "latest_volume": 4020193,
+      "high_90d": 107.5,
+      "low_90d": 89.345,
+      "avg_volume_20d": 13338478,
+      "market_score": -0.3971
+    },
+    "LRCX": {
+      "bars_count": 59,
+      "latest_close": 235.1,
+      "latest_volume": 2595552,
+      "high_90d": 251.87,
+      "low_90d": 135.5,
+      "avg_volume_20d": 12068952,
+      "market_score": -0.0721
+    },
+    "EOG": {
+      "bars_count": 59,
+      "latest_close": 118.95,
+      "latest_volume": 1734127,
+      "high_90d": 122.385,
+      "low_90d": 101.5936,
+      "avg_volume_20d": 5136585,
+      "market_score": -0.0826
+    },
+    "SNPS": {
+      "bars_count": 59,
+      "latest_close": 418.7825,
+      "latest_volume": 985271,
+      "high_90d": 535.2,
+      "low_90d": 376.6922,
+      "avg_volume_20d": 2328484,
+      "market_score": -0.3672
+    },
+    "TMO": {
+      "bars_count": 59,
+      "latest_close": 504.4,
+      "latest_volume": 1543263,
+      "high_90d": 643.99,
+      "low_90d": 493.64,
+      "avg_volume_20d": 2756646,
+      "market_score": -0.4343
+    },
+    "ORCL": {
+      "bars_count": 59,
+      "latest_close": 154.48,
+      "latest_volume": 8172188,
+      "high_90d": 234.0,
+      "low_90d": 135.25,
+      "avg_volume_20d": 31527217,
+      "market_score": -0.4026
+    },
+    "DIS": {
+      "bars_count": 59,
+      "latest_close": 105.66,
+      "latest_volume": 4232122,
+      "high_90d": 116.03,
+      "low_90d": 101.02,
+      "avg_volume_20d": 13833434,
+      "market_score": -0.3454
+    },
+    "CRM": {
+      "bars_count": 59,
+      "latest_close": 184.89,
+      "latest_volume": 6057216,
+      "high_90d": 269.11,
+      "low_90d": 180.24,
+      "avg_volume_20d": 13304829,
+      "market_score": -0.4738
+    },
+    "CDNS": {
+      "bars_count": 59,
+      "latest_close": 288.23,
+      "latest_volume": 1753351,
+      "high_90d": 341.31,
+      "low_90d": 262.749,
+      "avg_volume_20d": 2667228,
+      "market_score": -0.2591
+    }
+  },
+  "crypto": {
+    "ETH/USD": {
+      "bars_count": 89,
+      "latest_close": 1960.6965,
+      "latest_volume": 14.215921546,
+      "high_90d": 3448.592,
+      "low_90d": 1740.66,
+      "avg_volume_20d": 76.85122391675,
+      "market_score": -0.4356
+    },
+    "XRP/USD": {
+      "bars_count": 89,
+      "latest_close": 1.46465,
+      "latest_volume": 4991.697421755,
+      "high_90d": 2.415,
+      "low_90d": 1.11885,
+      "avg_volume_20d": 36087.11539238064,
+      "market_score": -0.3666
+    },
+    "DOGE/USD": {
+      "bars_count": 89,
+      "latest_close": 0.1001244,
+      "latest_volume": 13525.889341159,
+      "high_90d": 0.1683678825,
+      "low_90d": 0.0799899,
+      "avg_volume_20d": 106647.89952890275,
+      "market_score": -0.3861
+    },
+    "BTC/USD": {
+      "bars_count": 89,
+      "latest_close": 67153.425,
+      "latest_volume": 0.495965477,
+      "high_90d": 97956.175,
+      "low_90d": 59968.06,
+      "avg_volume_20d": 5.7317755652999995,
+      "market_score": -0.4054
+    },
+    "LINK/USD": {
+      "bars_count": 89,
+      "latest_close": 8.737285,
+      "latest_volume": 11101.962331498,
+      "high_90d": 15.00145,
+      "low_90d": 7.174245,
+      "avg_volume_20d": 7704.396180352652,
+      "market_score": -0.0399
+    }
+  },
+  "timestamp": "2026-02-18T01:12:10.973445"
+}

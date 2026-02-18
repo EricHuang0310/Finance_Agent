@@ -1,0 +1,110 @@
+[
+  {
+    "timestamp": "2026-02-12T21:06:18.084159",
+    "symbol": "C",
+    "side": "buy",
+    "qty": 85,
+    "entry_price": 117.39,
+    "stop_loss": 110.09,
+    "take_profit": 128.35,
+    "score": 0.464,
+    "order_id": "574aa950-c349-4ead-b137-eeb36a1b29e5",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-12T21:06:19.301267",
+    "symbol": "BAC",
+    "side": "buy",
+    "qty": 185,
+    "entry_price": 53.85,
+    "stop_loss": 51.27,
+    "take_profit": 57.73,
+    "score": 0.4563,
+    "order_id": "2b9db5bf-29ba-4338-88d2-5ab3c6923a2b",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-12T21:06:20.580897",
+    "symbol": "JPM",
+    "side": "buy",
+    "qty": 32,
+    "entry_price": 310.82,
+    "stop_loss": 294.94,
+    "take_profit": 334.64,
+    "score": 0.4467,
+    "order_id": "4718a643-9b11-46e3-a644-1818d09a41e7",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-12T21:06:21.647102",
+    "symbol": "MCD",
+    "side": "buy",
+    "qty": 30,
+    "entry_price": 323.21,
+    "stop_loss": 312.98,
+    "take_profit": 338.56,
+    "score": 0.3346,
+    "order_id": "7a8ef82e-0817-4af6-8050-cb99969760d7",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-18T01:12:47.515456",
+    "symbol": "CRM",
+    "side": "sell",
+    "qty": 53,
+    "entry_price": 184.89,
+    "stop_loss": 205.04,
+    "take_profit": 154.66,
+    "score": -0.5905,
+    "order_id": "508f080e-9231-4085-ade5-347fa589efbc",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-18T01:12:49.089944",
+    "symbol": "NFLX",
+    "side": "sell",
+    "qty": 129,
+    "entry_price": 76.34,
+    "stop_loss": 81.45,
+    "take_profit": 68.67,
+    "score": -0.5699,
+    "order_id": "6c32c97a-099c-443c-8e85-41b53f962c3e",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-18T01:12:50.547303",
+    "symbol": "RBLX",
+    "side": "sell",
+    "qty": 155,
+    "entry_price": 63.76,
+    "stop_loss": 74.49,
+    "take_profit": 47.66,
+    "score": -0.4484,
+    "order_id": "42c85e85-7722-4dc8-b958-fcf4eb0a3f65",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-18T01:12:52.119435",
+    "symbol": "EOG",
+    "side": "buy",
+    "qty": 83,
+    "entry_price": 118.95,
+    "stop_loss": 111.92,
+    "take_profit": 129.5,
+    "score": 0.4134,
+    "order_id": "295a6b57-32ea-4ee5-98f7-e3af51f21835",
+    "order_status": "pending_new"
+  },
+  {
+    "timestamp": "2026-02-18T01:12:53.651377",
+    "symbol": "AMAT",
+    "side": "buy",
+    "qty": 27,
+    "entry_price": 358.96,
+    "stop_loss": 319.55,
+    "take_profit": 418.09,
+    "score": 0.3725,
+    "order_id": "f2d8746a-9288-4955-a827-a413cdbdadfe",
+    "order_status": "pending_new"
+  }
+]

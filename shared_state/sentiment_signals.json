@@ -1,0 +1,233 @@
+{
+  "timestamp": "2026-02-18T01:12:37.832604",
+  "market_sentiment": "neutral",
+  "fear_greed_index": 49,
+  "symbols": {
+    "HOOD": {
+      "score": -0.1388,
+      "news_count": 7,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Cantor Fitzgerald Maintains Overweight on Robinhood Markets, Lowers Price Target to $100",
+        "Cathie Wood: Bitcoin's Drop Driven By Algorithmic Selling, Not Fundamentals",
+        "CFTC Chairman Selig: 'Prediction Markets Provide Useful Functions For Society'",
+        "Big Short Steve Eisman Favors Schwab, Cites Robinhood's Lack Of 'Margin For Error' Amid Bitcoin-Led Crypto Slide",
+        "Mizuho Maintains Outperform on Robinhood Markets, Lowers Price Target to $135"
+      ]
+    },
+    "RBLX": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    },
+    "AMAT": {
+      "score": -0.4026,
+      "news_count": 3,
+      "sentiment": "bearish",
+      "top_headlines": [
+        "Nasdaq Down 50 Points, Records Weekly Loss: Investor Sentiment Declines Further, Greed Index In 'Fear' Zone",
+        "Barclays Maintains Overweight on Applied Materials, Raises Price Target to $450",
+        "Consumer Tech News (Feb 9-13): AI Energy Push, And Mixed Tech Earnings Dominate Headlines & More"
+      ]
+    },
+    "SMCI": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    },
+    "MU": {
+      "score": -0.0986,
+      "news_count": 5,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Anthropic CEO Dario Amodei Warns One Wrong AI Bet Could Bankrupt The Company: 'No Hedge On Earth That Could Stop...'",
+        "Micron To Rally More Than 9%? Here Are 10 Top Analyst Forecasts For Tuesday",
+        "Big Tech Market Caps Slide As AI Spending Faces Scrutiny",
+        "Needham Maintains Buy on Micron Technology, Raises Price Target to $450",
+        "10 Information Technology Stocks With Whale Alerts In Today's Session"
+      ]
+    },
+    "SOFI": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    },
+    "PLTR": {
+      "score": -0.2507,
+      "news_count": 3,
+      "sentiment": "bearish",
+      "top_headlines": [
+        "'Big Short' Investor Michael Burry Targets Palantir Over 'Covert Smear' Claims, Warns Of Over 50% Stock Collapse",
+        "Anthropic Could Face 'Supply Chain Risk' Tag As Pentagon Weighs Cutting Ties: Report",
+        "Palantir Moves Headquarters From Denver To Miami"
+      ]
+    },
+    "C": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    },
+    "AMD": {
+      "score": 0.0213,
+      "news_count": 3,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "AMD Targets Nvidia's Turf With Massive Tata Partnership",
+        "Big Tech Market Caps Slide As AI Spending Faces Scrutiny",
+        "10 Information Technology Stocks With Whale Alerts In Today's Session"
+      ]
+    },
+    "UNH": {
+      "score": 0.3457,
+      "news_count": 1,
+      "sentiment": "bullish",
+      "top_headlines": [
+        "Wall Street's Most Accurate Analysts Weigh In On 3 Health Care Stocks With Over 3% Dividend Yields"
+      ]
+    },
+    "NFLX": {
+      "score": 0.1344,
+      "news_count": 6,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Paramount's Sweetened $30 Offer Puts Netflix's $27.75 Warner Bros. Deal At Risk, Board Weighs Second Showdown: Report",
+        "Warner Bros Rejects Paramount's Latest Bid But Gives David Ellison's Firm A Week To Submit 'Best And Final' Offer\u2014 WBD, PSKY Stock Up Before The Bell",
+        "Consumer Tech News (Feb 9-13): AI Energy Push, And Mixed Tech Earnings Dominate Headlines & More",
+        "'Netflix grants Warner Bros. Discovery 7-day waiver to reopen deal talks with Paramount Skydance' - CNBC",
+        "Warner Bros Stock Climbs Tuesday: What's Happening?"
+      ]
+    },
+    "SCHW": {
+      "score": -0.298,
+      "news_count": 1,
+      "sentiment": "bearish",
+      "top_headlines": [
+        "Big Short Steve Eisman Favors Schwab, Cites Robinhood's Lack Of 'Margin For Error' Amid Bitcoin-Led Crypto Slide"
+      ]
+    },
+    "LRCX": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    },
+    "EOG": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    },
+    "SNPS": {
+      "score": 0.0,
+      "news_count": 1,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Price Over Earnings Overview: Synopsys"
+      ]
+    },
+    "TMO": {
+      "score": 0.0888,
+      "news_count": 1,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "QXO, Apollo Global, Thermo Fisher Scientific And More On CNBC's 'Final Trades'"
+      ]
+    },
+    "ORCL": {
+      "score": -0.1297,
+      "news_count": 2,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "OpenAI Backlog Shockwave: Are Investors Punishing Oracle, Microsoft And Broadcom Over Altman's Trillion-Dollar Compute Bet?",
+        "Consumer Tech News (Feb 9-13): AI Energy Push, And Mixed Tech Earnings Dominate Headlines & More"
+      ]
+    },
+    "DIS": {
+      "score": -0.1162,
+      "news_count": 1,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "ByteDance Scrambles To Rein In Seedance 2.0 After Disney, Paramount Threaten Legal Action Over AI-Created Videos: Report"
+      ]
+    },
+    "CRM": {
+      "score": -0.1215,
+      "news_count": 5,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Amazon's 9-Day Losing Streak Is Overdone, Says Futurum's David Nicholson, Calling $400 Billion Rout A 'Game Of Chicken'",
+        "Consumer Tech News (Feb 9-13): AI Energy Push, And Mixed Tech Earnings Dominate Headlines & More",
+        "Oppenheimer Maintains Outperform on Salesforce, Lowers Price Target to $275",
+        "Mizuho Maintains Outperform on Salesforce, Lowers Price Target to $280",
+        "10 Information Technology Stocks With Whale Alerts In Today's Session"
+      ]
+    },
+    "CDNS": {
+      "score": 0.0,
+      "news_count": 2,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Palo Alto, Opendoor, Carvana And More Stocks With Earnings This Week",
+        "Earnings Scheduled For February 17, 2026"
+      ]
+    },
+    "ETH/USD": {
+      "score": 0.181,
+      "news_count": 10,
+      "sentiment": "bullish",
+      "top_headlines": [
+        "Bitcoin Flat, Ethereum, XRP Gain, While Dogecoin Slides: Analyst Explains Why 'Most Awful' Periods Could Be Best Time To Accumulate Crypto",
+        "Bitcoin, Ethereum, XRP Hold Steady While Dogecoin Slips \u2014 Traders Eye 'Best Buying Opportunity'",
+        "Brian Armstrong Reveals Retail Users 'Buying The Dip' In Bitcoin, Ethereum: Coinbase CEO Says, 'They Have Diamond Hands'",
+        "XRP Gains Strength Against Bitcoin As Liquidity Expands \u2014 Is A Bigger Move Ahead?",
+        "XRP Is The 'Second Most Talked-About Asset,' Grayscale Says: $1.80 Next?"
+      ]
+    },
+    "XRP/USD": {
+      "score": 0.2697,
+      "news_count": 9,
+      "sentiment": "bullish",
+      "top_headlines": [
+        "Ripple CEO Gives Clarity Act 80% Odds By April: 'Don't Let Perfection Kill Progress'",
+        "Bitcoin Flat, Ethereum, XRP Gain, While Dogecoin Slides: Analyst Explains Why 'Most Awful' Periods Could Be Best Time To Accumulate Crypto",
+        "Bitcoin, Ethereum, XRP Hold Steady While Dogecoin Slips \u2014 Traders Eye 'Best Buying Opportunity'",
+        "XRP Gains Strength Against Bitcoin As Liquidity Expands \u2014 Is A Bigger Move Ahead?",
+        "XRP Is The 'Second Most Talked-About Asset,' Grayscale Says: $1.80 Next?"
+      ]
+    },
+    "DOGE/USD": {
+      "score": 0.1407,
+      "news_count": 12,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Bitcoin Flat, Ethereum, XRP Gain, While Dogecoin Slides: Analyst Explains Why 'Most Awful' Periods Could Be Best Time To Accumulate Crypto",
+        "Bitcoin, Ethereum, XRP Hold Steady While Dogecoin Slips \u2014 Traders Eye 'Best Buying Opportunity'",
+        "Brian Armstrong Reveals Retail Users 'Buying The Dip' In Bitcoin, Ethereum: Coinbase CEO Says, 'They Have Diamond Hands'",
+        "What Happens To Strategy's Bitcoin Model If Prices Crash To $8,000? Michael Saylor Has A Plan",
+        "Pepe Gains 16% In A Week Leaving Dogecoin, Shiba Inu Behind As 'History Is In The Making'"
+      ]
+    },
+    "BTC/USD": {
+      "score": 0.0444,
+      "news_count": 22,
+      "sentiment": "neutral",
+      "top_headlines": [
+        "Bitcoin Flat, Ethereum, XRP Gain, While Dogecoin Slides: Analyst Explains Why 'Most Awful' Periods Could Be Best Time To Accumulate Crypto",
+        "Bitcoin, Ethereum, XRP Hold Steady While Dogecoin Slips \u2014 Traders Eye 'Best Buying Opportunity'",
+        "Cathie Wood: Bitcoin's Drop Driven By Algorithmic Selling, Not Fundamentals",
+        "Brian Armstrong Reveals Retail Users 'Buying The Dip' In Bitcoin, Ethereum: Coinbase CEO Says, 'They Have Diamond Hands'",
+        "XRP Gains Strength Against Bitcoin As Liquidity Expands \u2014 Is A Bigger Move Ahead?"
+      ]
+    },
+    "LINK/USD": {
+      "score": 0.0,
+      "news_count": 0,
+      "sentiment": "neutral",
+      "top_headlines": []
+    }
+  }
+}

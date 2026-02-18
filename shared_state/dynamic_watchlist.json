@@ -1,0 +1,213 @@
+{
+  "stocks": [
+    "HOOD",
+    "RBLX",
+    "AMAT",
+    "SMCI",
+    "MU",
+    "SOFI",
+    "PLTR",
+    "C",
+    "AMD",
+    "UNH",
+    "NFLX",
+    "SCHW",
+    "LRCX",
+    "EOG",
+    "SNPS",
+    "TMO",
+    "ORCL",
+    "DIS",
+    "CRM",
+    "CDNS"
+  ],
+  "crypto": [
+    "ETH/USD",
+    "XRP/USD",
+    "DOGE/USD",
+    "BTC/USD",
+    "LINK/USD"
+  ],
+  "details": {
+    "HOOD": {
+      "latest_close": 74.942,
+      "momentum_pct": -25.98,
+      "volume_ratio": 0.37,
+      "volatility": 0.075,
+      "activity_score": 1.3961
+    },
+    "RBLX": {
+      "latest_close": 63.76,
+      "momentum_pct": -15.81,
+      "volume_ratio": 0.23,
+      "volatility": 0.0674,
+      "activity_score": 1.3096
+    },
+    "AMAT": {
+      "latest_close": 359.135,
+      "momentum_pct": 5.21,
+      "volume_ratio": 0.37,
+      "volatility": 0.0448,
+      "activity_score": 1.1309
+    },
+    "SMCI": {
+      "latest_close": 30.2897,
+      "momentum_pct": 0.56,
+      "volume_ratio": 0.27,
+      "volatility": 0.0645,
+      "activity_score": 1.1297
+    },
+    "MU": {
+      "latest_close": 406.1292,
+      "momentum_pct": -6.81,
+      "volume_ratio": 0.39,
+      "volatility": 0.0511,
+      "activity_score": 1.1047
+    },
+    "SOFI": {
+      "latest_close": 19.625,
+      "momentum_pct": -19.44,
+      "volume_ratio": 0.35,
+      "volatility": 0.0409,
+      "activity_score": 0.9873
+    },
+    "PLTR": {
+      "latest_close": 131.45,
+      "momentum_pct": -13.44,
+      "volume_ratio": 0.34,
+      "volatility": 0.0535,
+      "activity_score": 0.8622
+    },
+    "C": {
+      "latest_close": 113.55,
+      "momentum_pct": -1.43,
+      "volume_ratio": 0.31,
+      "volatility": 0.0289,
+      "activity_score": 0.8525
+    },
+    "AMD": {
+      "latest_close": 202.375,
+      "momentum_pct": -19.75,
+      "volume_ratio": 0.44,
+      "volatility": 0.0634,
+      "activity_score": 0.8193
+    },
+    "UNH": {
+      "latest_close": 292.68,
+      "momentum_pct": 0.13,
+      "volume_ratio": 0.27,
+      "volatility": 0.0207,
+      "activity_score": 0.777
+    },
+    "NFLX": {
+      "latest_close": 76.34,
+      "momentum_pct": -8.2,
+      "volume_ratio": 0.44,
+      "volatility": 0.0206,
+      "activity_score": 0.7767
+    },
+    "SCHW": {
+      "latest_close": 93.07,
+      "momentum_pct": -10.05,
+      "volume_ratio": 0.27,
+      "volatility": 0.0276,
+      "activity_score": 0.7744
+    },
+    "LRCX": {
+      "latest_close": 235.15,
+      "momentum_pct": -5.25,
+      "volume_ratio": 0.21,
+      "volatility": 0.0445,
+      "activity_score": 0.7015
+    },
+    "EOG": {
+      "latest_close": 119.005,
+      "momentum_pct": 6.18,
+      "volume_ratio": 0.33,
+      "volatility": 0.0241,
+      "activity_score": 0.6885
+    },
+    "SNPS": {
+      "latest_close": 419.34,
+      "momentum_pct": -12.64,
+      "volume_ratio": 0.36,
+      "volatility": 0.0353,
+      "activity_score": 0.684
+    },
+    "TMO": {
+      "latest_close": 504.4,
+      "momentum_pct": -14.82,
+      "volume_ratio": 0.53,
+      "volatility": 0.0152,
+      "activity_score": 0.6762
+    },
+    "ORCL": {
+      "latest_close": 154.7,
+      "momentum_pct": -8.47,
+      "volume_ratio": 0.24,
+      "volatility": 0.0462,
+      "activity_score": 0.6597
+    },
+    "DIS": {
+      "latest_close": 105.66,
+      "momentum_pct": -5.31,
+      "volume_ratio": 0.27,
+      "volatility": 0.034,
+      "activity_score": 0.6526
+    },
+    "CRM": {
+      "latest_close": 185.03,
+      "momentum_pct": -13.57,
+      "volume_ratio": 0.4,
+      "volatility": 0.0286,
+      "activity_score": 0.6339
+    },
+    "CDNS": {
+      "latest_close": 288.81,
+      "momentum_pct": -4.58,
+      "volume_ratio": 0.53,
+      "volatility": 0.036,
+      "activity_score": 0.6324
+    },
+    "ETH/USD": {
+      "latest_close": 1960.6965,
+      "momentum_pct": -27.46,
+      "volume_ratio": 0.18,
+      "volatility": 0.0615,
+      "activity_score": 0.7376
+    },
+    "XRP/USD": {
+      "latest_close": 1.46465,
+      "momentum_pct": -15.46,
+      "volume_ratio": 0.14,
+      "volatility": 0.076,
+      "activity_score": 0.7337
+    },
+    "DOGE/USD": {
+      "latest_close": 0.1001244,
+      "momentum_pct": -13.45,
+      "volume_ratio": 0.13,
+      "volatility": 0.0678,
+      "activity_score": 0.6861
+    },
+    "BTC/USD": {
+      "latest_close": 67153.425,
+      "momentum_pct": -20.19,
+      "volume_ratio": 0.09,
+      "volatility": 0.0513,
+      "activity_score": 0.5947
+    },
+    "LINK/USD": {
+      "latest_close": 8.737285,
+      "momentum_pct": -18.88,
+      "volume_ratio": 1.37,
+      "volatility": 0.056,
+      "activity_score": 0.5709
+    }
+  },
+  "timestamp": "2026-02-18T01:12:10.971173",
+  "screened_from": {
+    "stock_universe": 87,
+    "crypto_universe": 10
+  }
+}
