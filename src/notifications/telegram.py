@@ -180,6 +180,40 @@ class TelegramNotifier:
         )
         self.send(msg)
 
+    def alert_position_closed(
+        self,
+        symbol: str,
+        side: str,
+        qty: float,
+        avg_entry_price: float,
+        exit_price: float,
+        unrealized_pl: float,
+        unrealized_plpc: float,
+        exit_reason: str,
+        order_id: str = "",
+    ):
+        """Send position closure notification with P&L / ROI."""
+        roi_pct = unrealized_plpc * 100
+        pl_emoji = "🟢" if unrealized_pl >= 0 else "🔴"
+
+        msg = (
+            f"{'━' * 30}\n"
+            f"📤 *POSITION CLOSED*\n"
+            f"{'━' * 30}\n\n"
+            f"{pl_emoji} *{symbol}* ({side.upper()})\n\n"
+            f"📊 Entry: `${avg_entry_price:,.2f}`\n"
+            f"📊 Exit: `${exit_price:,.2f}`\n"
+            f"📦 Qty: `{qty}`\n"
+            f"{'─' * 25}\n"
+            f"💰 P&L: `${unrealized_pl:+,.2f}` (`{roi_pct:+.2f}%`)\n"
+            f"{'─' * 25}\n"
+            f"📋 Reason: {exit_reason}\n"
+        )
+        if order_id:
+            msg += f"🆔 Order: `{order_id[:12]}...`\n"
+        msg += f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        self.send(msg)
+
     def alert_daily_limit(self, daily_pnl: float, daily_pnl_pct: float):
         """Daily loss limit reached."""
         msg = (

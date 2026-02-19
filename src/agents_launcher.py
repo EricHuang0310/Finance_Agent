@@ -83,6 +83,84 @@ def task_sentiment_analyst() -> dict:
     return result
 
 
+def task_position_review() -> list[dict]:
+    """Task for Position Exit Review agent. Reviews existing positions for exit signals."""
+    print("🔄 [Position Reviewer] Reviewing existing positions...")
+    orch = get_orchestrator()
+
+    # Load tech signals and market data from shared state
+    tech_signals = {}
+    market_data = {}
+    tech_path = Path("shared_state/technical_signals.json")
+    market_path = Path("shared_state/market_overview.json")
+    if tech_path.exists():
+        with open(tech_path) as f:
+            tech_signals = json.load(f)
+    if market_path.exists():
+        with open(market_path) as f:
+            market_data = json.load(f)
+
+    exit_candidates = orch.run_position_exit_review(tech_signals, market_data)
+    print(f"🔄 [Position Reviewer] ✅ Complete: {len(exit_candidates)} positions flagged for exit")
+    return exit_candidates
+
+
+def task_execute_exits(exit_candidates: list[dict]) -> list[dict]:
+    """Task for Executor agent. Closes positions flagged for exit."""
+    print("📤 [Executor] Closing positions...")
+    orch = get_orchestrator()
+    notifier = TelegramNotifier()
+
+    executed_exits = []
+    for candidate in exit_candidates:
+        try:
+            close_side = "sell" if candidate["side"] == "long" else "buy"
+            print(f"  📤 Closing {candidate['symbol']} ({candidate['side']}): "
+                  f"qty={candidate['qty']} @ ~${candidate['current_price']:.2f}")
+
+            result = orch.client.place_market_order(
+                symbol=candidate["symbol"],
+                qty=candidate["qty"],
+                side=close_side,
+            )
+            candidate["order_id"] = result["id"]
+            candidate["order_status"] = result["status"]
+            executed_exits.append(candidate)
+
+            print(f"  ✅ Closed: {result['id']} | Status: {result['status']}")
+
+            # Telegram notification with ROI
+            notifier.alert_position_closed(
+                symbol=candidate["symbol"],
+                side=candidate["side"],
+                qty=candidate["qty"],
+                avg_entry_price=candidate["avg_entry_price"],
+                exit_price=candidate["current_price"],
+                unrealized_pl=candidate["unrealized_pl"],
+                unrealized_plpc=candidate["unrealized_plpc"],
+                exit_reason=candidate["exit_reason"],
+                order_id=result["id"],
+            )
+
+            # Log trade
+            orch._log_trade({
+                "symbol": candidate["symbol"],
+                "side": close_side,
+                "suggested_qty": candidate["qty"],
+                "entry_price": candidate["current_price"],
+                "composite_score": candidate.get("exit_score", 0),
+                "action": "close_position",
+                "exit_reason": candidate["exit_reason"],
+            }, result)
+
+        except Exception as e:
+            print(f"  ❌ Failed to close {candidate['symbol']}: {e}")
+            notifier.alert_order_rejected(candidate["symbol"], f"Exit failed: {e}")
+
+    print(f"📤 [Executor] ✅ Exits complete: {len(executed_exits)}/{len(exit_candidates)} closed")
+    return executed_exits
+
+
 def task_risk_manager(candidates: list[dict]) -> list[dict]:
     """Task for Risk Manager agent. Requires candidates from decision engine."""
     print("🛡️ [Risk Manager] Starting risk assessment...")
@@ -249,12 +327,19 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
     tech_signals = task_technical_analyst()
     sentiment = task_sentiment_analyst()
 
+    # Phase 1.5: Position exit review
+    exit_candidates = task_position_review()
+
+    # Execute exits BEFORE new entries (frees capital & position slots)
+    if execute and exit_candidates:
+        task_execute_exits(exit_candidates)
+
     # Phase 2: Decision engine
     candidates = task_generate_decisions(tech_signals, sentiment, market_data)
 
     if not candidates:
         print("\n📭 No trade candidates. Pipeline complete.")
-        if notify:
+        if notify and not exit_candidates:
             notifier.send("📭 *Pipeline Complete*\nNo trade candidates meet threshold.")
         return
 
@@ -278,12 +363,14 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
             )
         notifier.report_pipeline_summary(candidates, approved, rejected)
 
-    # Phase 5: Execute (if enabled)
+    # Phase 5: Execute new entries (if enabled)
     if execute and approved:
         executed = task_execute_trades(assessed)
-        print(f"\n✅ Pipeline complete: {len(executed)} executed, {len(rejected)} rejected")
+        print(f"\n✅ Pipeline complete: {len(executed)} executed, {len(rejected)} rejected"
+              + (f", {len(exit_candidates)} exited" if exit_candidates else ""))
     else:
-        print(f"\n✅ Pipeline complete: {len(approved)} approved, {len(rejected)} rejected")
+        print(f"\n✅ Pipeline complete: {len(approved)} approved, {len(rejected)} rejected"
+              + (f", {len(exit_candidates)} exit signals" if exit_candidates else ""))
         if approved:
             print("   Run with --trade flag to execute orders")
 
@@ -334,7 +421,19 @@ AGENT_TEAMS_PROMPT = """
    task_sentiment_analyst()
    ```
 
-## Phase 2 (Sequential, 等 Phase 1 全部完成)
+## Phase 1.5 (Position Exit Review, 等 Phase 1 全部完成)
+審查現有持倉是否需要平倉：
+
+3.5. **position-reviewer** - 讀取 agents/position_reviewer.md 的指令，
+   然後執行:
+   ```python
+   from src.agents_launcher import task_position_review
+   exit_candidates = task_position_review()
+   # 結果寫入 shared_state/exit_review.json
+   # 如有需要平倉的持倉，傳給 Executor 優先處理
+   ```
+
+## Phase 2 (Sequential, 等 Phase 1.5 完成)
 
 4. 我 (Lead) 讀取 shared_state/ 中的所有 JSON 結果，
    執行 Decision Engine:

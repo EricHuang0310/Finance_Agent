@@ -80,3 +80,9 @@ risk:
   max_drawdown_pct: 10        # Max drawdown from peak %
   min_risk_reward: 1.5        # Minimum risk-reward ratio
 
+# Position exit review settings
+position_exit:
+  exit_threshold: 0.5         # Min exit_score to trigger close (0.0 - 1.0)
+  atr_multiplier: 2.0         # Trailing stop = recent_high - multiplier * ATR
+  trailing_lookback_bars: 10   # Bars to look back for recent high/low
+

@@ -19,6 +19,7 @@ from src.alpaca_client import AlpacaClient
 from src.analysis.technical import TechnicalAnalyzer
 from src.analysis.sentiment import SentimentAnalyzer
 from src.analysis.screener import SymbolScreener
+from src.analysis.position_reviewer import PositionReviewer
 from src.risk.manager import RiskManager
 from src.notifications.telegram import TelegramNotifier
 
@@ -47,6 +48,7 @@ class TradingOrchestrator:
         self.sentiment_analyzer = SentimentAnalyzer(self.client)
         self.screener = SymbolScreener(self.client, self.config)
         self.risk_manager = RiskManager(self.config)
+        self.position_reviewer = PositionReviewer(self.config)
         self.notifier = TelegramNotifier()
 
         # Shared state paths
@@ -244,6 +246,119 @@ class TradingOrchestrator:
 
         self._save_state("sentiment_signals.json", sentiment)
         return sentiment
+
+    # ══════════════════════════════════════════════
+    # Agent 3.5: Position Exit Review
+    # ══════════════════════════════════════════════
+
+    def run_position_exit_review(self, tech_signals: dict, market_data: dict) -> list[dict]:
+        """Review existing positions for exit signals."""
+        print("\n" + "=" * 60)
+        print("🔄 AGENT 3.5: Position Exit Review")
+        print("=" * 60)
+
+        positions = self.client.get_positions()
+        if not positions:
+            print("  📭 No open positions to review.")
+            return []
+
+        print(f"  Reviewing {len(positions)} position(s)...")
+
+        def bars_getter(symbol, asset_type):
+            return self._get_bars(symbol, asset_type)
+
+        results = self.position_reviewer.review_all(
+            positions=positions,
+            tech_signals=tech_signals,
+            market_data=market_data,
+            bars_getter=bars_getter,
+        )
+
+        exits = [r for r in results if r.exit_action == "close"]
+        holds = [r for r in results if r.exit_action == "hold"]
+
+        for r in results:
+            if r.exit_action == "close":
+                roi_pct = r.unrealized_plpc * 100
+                print(f"  📤 {r.symbol} ({r.side}): EXIT score={r.exit_score:.3f} | "
+                      f"P&L={roi_pct:+.2f}% | {r.exit_reason}")
+            else:
+                print(f"  ✅ {r.symbol} ({r.side}): HOLD score={r.exit_score:.3f}")
+
+        self._save_state("exit_review.json", {
+            "timestamp": datetime.now().isoformat(),
+            "positions_reviewed": len(positions),
+            "exits_flagged": len(exits),
+            "exits": [e.to_dict() for e in exits],
+            "holds": [h.to_dict() for h in holds],
+        })
+
+        # Convert ExitSignals to dicts for executor
+        exit_candidates = []
+        for e in exits:
+            exit_candidates.append({
+                "symbol": e.symbol,
+                "side": e.side,
+                "qty": e.qty,
+                "avg_entry_price": e.avg_entry_price,
+                "current_price": e.current_price,
+                "unrealized_pl": e.unrealized_pl,
+                "unrealized_plpc": e.unrealized_plpc,
+                "exit_score": e.exit_score,
+                "exit_reason": e.exit_reason,
+            })
+
+        return exit_candidates
+
+    def execute_exits(self, exit_candidates: list[dict]):
+        """Execute position closures and notify via Telegram."""
+        print("\n" + "=" * 60)
+        print("📤 Executing Position Exits")
+        print("=" * 60)
+
+        for candidate in exit_candidates:
+            symbol = candidate["symbol"]
+            close_side = "sell" if candidate["side"] == "long" else "buy"
+
+            try:
+                print(f"  📤 Closing {symbol} ({candidate['side']}): "
+                      f"qty={candidate['qty']} @ ~${candidate['current_price']:.2f}")
+
+                result = self.client.place_market_order(
+                    symbol=symbol,
+                    qty=candidate["qty"],
+                    side=close_side,
+                )
+
+                print(f"  ✅ Closed: {result['id']} | Status: {result['status']}")
+
+                # Telegram notification with ROI
+                self.notifier.alert_position_closed(
+                    symbol=symbol,
+                    side=candidate["side"],
+                    qty=candidate["qty"],
+                    avg_entry_price=candidate["avg_entry_price"],
+                    exit_price=candidate["current_price"],
+                    unrealized_pl=candidate["unrealized_pl"],
+                    unrealized_plpc=candidate["unrealized_plpc"],
+                    exit_reason=candidate["exit_reason"],
+                    order_id=result["id"],
+                )
+
+                # Log trade
+                self._log_trade({
+                    "symbol": symbol,
+                    "side": close_side,
+                    "suggested_qty": candidate["qty"],
+                    "entry_price": candidate["current_price"],
+                    "composite_score": candidate.get("exit_score", 0),
+                    "action": "close_position",
+                    "exit_reason": candidate["exit_reason"],
+                }, result)
+
+            except Exception as e:
+                print(f"  ❌ Failed to close {symbol}: {e}")
+                self.notifier.alert_order_rejected(symbol, f"Exit failed: {e}")
 
     # ══════════════════════════════════════════════
     # Agent 4: Risk Manager
@@ -528,18 +643,26 @@ class TradingOrchestrator:
         # Step 3: Sentiment analysis
         sentiment = self.run_sentiment_analyst()
 
+        # Step 3.5: Position exit review
+        exit_candidates = self.run_position_exit_review(tech_signals, market_data)
+
+        # Execute exits BEFORE new entries (frees capital & position slots)
+        if execute and exit_candidates:
+            self.execute_exits(exit_candidates)
+
         # Step 4: Generate trade plan
         candidates = self.generate_trade_plan(tech_signals, sentiment, market_data)
 
         if not candidates:
             print("\n📭 No trade candidates meet the threshold. Pipeline complete.")
-            self.notifier.send("📭 *Pipeline Complete*\nNo trade candidates meet threshold.")
+            if not exit_candidates:
+                self.notifier.send("📭 *Pipeline Complete*\nNo trade candidates meet threshold.")
             return
 
         # Step 5: Risk assessment
         assessed = self.run_risk_manager(candidates)
 
-        # Step 6: Execute (if enabled)
+        # Step 6: Execute new entries (if enabled)
         if execute:
             require_confirm = self.decision_cfg.get("require_human_confirm", True)
             self.execute_trades(assessed, require_confirmation=require_confirm)
