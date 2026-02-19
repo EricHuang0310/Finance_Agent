@@ -1,1 +1,13 @@
 .env
+# ignore data folder
+data/
+
+# ignore logs
+logs/
+
+# ignore shared state json
+shared_state/*.json
+
+# ignore python cache
+__pycache__/
+*.pyc

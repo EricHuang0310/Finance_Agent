@@ -37,13 +37,13 @@ class TradingOrchestrator:
     6. Executor         → Place orders (with human confirmation)
     """
 
-    def __init__(self, config_path: str = "config/settings.yaml"):
+    def __init__(self, config_path: str = "config/settings.yaml", client=None):
         # Load config
         with open(config_path, "r") as f:
             self.config = yaml.safe_load(f)
 
-        # Initialize components
-        self.client = AlpacaClient()
+        # Initialize components (accept injected client for backtesting)
+        self.client = client if client is not None else AlpacaClient()
         self.tech_analyzer = TechnicalAnalyzer()
         self.sentiment_analyzer = SentimentAnalyzer(self.client)
         self.screener = SymbolScreener(self.client, self.config)

@@ -1,88 +1,72 @@
 {
-  "timestamp": "2026-02-19T23:55:33.616920",
+  "timestamp": "2026-02-20T00:52:29.524571",
   "summary": {
-    "equity": 100000.0,
-    "cash": 100000.0,
-    "current_exposure_pct": 0.0,
+    "equity": 199034649.52860004,
+    "cash": 177104689.30860004,
+    "current_exposure_pct": 11.02,
     "max_exposure_pct": 60.0,
-    "daily_pnl_pct": 0.0,
-    "position_count": 0,
+    "daily_pnl_pct": -0.03,
+    "position_count": 8,
     "max_positions": 8,
     "kill_switch_active": false,
     "daily_limit_hit": false
   },
   "assessments": [
     {
-      "symbol": "PANW",
-      "approved": true,
-      "reason": "Approved: 67 shares (short), R:R=1.50",
-      "suggested_qty": 67,
-      "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.93
-    },
-    {
-      "symbol": "GE",
-      "approved": true,
-      "reason": "Approved: 29 shares, R:R=1.50",
-      "suggested_qty": 29,
-      "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.7
-    },
-    {
-      "symbol": "HOOD",
+      "symbol": "COIN",
       "approved": false,
-      "reason": "R:R 1.50 < min 1.5",
+      "reason": "Max positions (8) reached",
       "suggested_qty": 0,
-      "risk_reward_ratio": 1.499999999999999,
+      "risk_reward_ratio": 0,
       "position_size_pct": 0
     },
     {
-      "symbol": "DE",
-      "approved": true,
-      "reason": "Approved: 15 shares, R:R=1.50",
-      "suggested_qty": 15,
-      "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.89
+      "symbol": "ONDS",
+      "approved": false,
+      "reason": "R:R 1.50 < min 1.5",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 1.4973821989528793,
+      "position_size_pct": 0
     },
     {
-      "symbol": "EOG",
-      "approved": true,
-      "reason": "Approved: 79 shares, R:R=1.50",
-      "suggested_qty": 79,
-      "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.9
+      "symbol": "XOM",
+      "approved": false,
+      "reason": "Max positions (8) reached",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 0,
+      "position_size_pct": 0
     },
     {
-      "symbol": "PLTR",
-      "approved": true,
-      "reason": "Approved: 74 shares (short), R:R=1.50",
-      "suggested_qty": 74,
-      "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.97
+      "symbol": "MU",
+      "approved": false,
+      "reason": "Max positions (8) reached",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 0,
+      "position_size_pct": 0
     },
     {
-      "symbol": "AMAT",
-      "approved": true,
-      "reason": "Approved: 27 shares, R:R=1.50",
-      "suggested_qty": 27,
-      "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.86
+      "symbol": "MCD",
+      "approved": false,
+      "reason": "Max positions (8) reached",
+      "suggested_qty": 0,
+      "risk_reward_ratio": 0,
+      "position_size_pct": 0
     },
     {
-      "symbol": "AMGN",
+      "symbol": "TSM",
       "approved": true,
-      "reason": "Approved: 26 shares, R:R=1.50",
-      "suggested_qty": 26,
+      "reason": "Approved: 57117 shares, R:R=1.50",
+      "suggested_qty": 57117,
       "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.8
+      "position_size_pct": 8.72
     },
     {
-      "symbol": "AMD",
+      "symbol": "C",
       "approved": true,
-      "reason": "Approved: 49 shares (short), R:R=1.50",
-      "suggested_qty": 49,
+      "reason": "Approved: 155627 shares, R:R=1.50",
+      "suggested_qty": 155627,
       "risk_reward_ratio": 1.5,
-      "position_size_pct": 9.9
+      "position_size_pct": 9.12
     }
   ]
 }
