@@ -9,8 +9,6 @@ All commands must be run from the project root (paths like `config/settings.yaml
 ```bash
 # Install dependencies
 pip install -r requirements.txt
-# Note: pyarrow is needed for backtesting but not in requirements.txt
-
 # Run analysis only
 python -m src.orchestrator
 
@@ -22,9 +20,6 @@ python -m src.agents_launcher --run [--trade] [--notify]
 
 # Show Claude Code Agent Teams prompt
 python -m src.agents_launcher --prompt
-
-# Backtest
-python -m src.backtest.runner --start 2020-01-01 --end 2025-12-31 --capital 100000
 
 # Test Telegram
 python -m src.agents_launcher --test-telegram
@@ -54,7 +49,6 @@ Agents communicate via JSON files in `shared_state/`. Each agent writes its outp
 
 ### Key Design Decisions
 
-- **Dependency injection**: `TradingOrchestrator.__init__` accepts optional `client=None`. Live/paper mode creates `AlpacaClient` internally; backtest mode injects `BacktestClient`.
 - **Bar cache**: `TradingOrchestrator._bar_cache` deduplicates API calls within a single run, keyed by `(symbol, timeframe, lookback_days)`.
 - **Scoring is momentum-oriented** (not mean-reversion): RSI 50-70 = bullish, BB upper = trend strength, price near 90d HIGH = positive.
 - **Composite score**: `(tech * 0.35 + market * 0.20 + sentiment * 0.15) / 0.70` — risk_manager weight (0.30) is veto-only, excluded from scoring denominator.
@@ -74,12 +68,3 @@ Agents communicate via JSON files in `shared_state/`. Each agent writes its outp
 - `watchlist_mode: dynamic|static` controls whether the screener (Phase 0) runs.
 - `risk.kill_switch_pct` halts all trading when daily loss exceeds threshold.
 - Agent specs in `agents/*.md` are written in Chinese.
-
-## Backtest System (`src/backtest/`)
-
-- `data_loader.py`: Fetches historical bars from Alpaca, caches as Parquet in `data/backtest_cache/`
-- `client.py`: `BacktestClient` — drop-in mock for `AlpacaClient` with date-windowed serving (prevents look-ahead bias)
-- `runner.py`: Iterates trading days, creates fresh `TradingOrchestrator` per day with injected `BacktestClient`
-- `report.py`: Computes Sharpe, Sortino, Calmar, max drawdown, win rate, profit factor
-- Output: `logs/backtest_report.json`
-- Limitations: stocks only (no crypto), no sentiment (weight=0), static watchlist mode only
