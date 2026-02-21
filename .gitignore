@@ -5,8 +5,8 @@ data/
 # ignore logs
 logs/
 
-# ignore shared state json
-shared_state/*.json
+# ignore shared state
+shared_state/
 
 # ignore python cache
 __pycache__/
