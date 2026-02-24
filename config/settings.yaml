@@ -73,8 +73,8 @@ decision:
 # Risk management constraints
 risk:
   max_position_pct: 10        # Max single position as % of portfolio
-  max_exposure_pct: 60        # Max total exposure as % of portfolio
-  max_positions: 8            # Max simultaneous positions
+  max_exposure_pct: 80        # Max total exposure as % of portfolio
+  max_positions: 10           # Max simultaneous positions
   daily_loss_limit_pct: 2     # Daily loss limit %
   kill_switch_pct: 3          # Kill switch trigger %
   max_drawdown_pct: 10        # Max drawdown from peak %

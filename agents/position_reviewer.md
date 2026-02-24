@@ -32,7 +32,7 @@ Phase 4:   Executor（先平倉，後建倉）
 Phase 5:   Reporter
 ```
 
-**先平倉再建倉** → 釋放資金和持倉名額（max_positions: 8）
+**先平倉再建倉** → 釋放資金和持倉名額（max_positions: 10）
 
 ## 退出評分邏輯
 
