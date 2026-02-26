@@ -5,3 +5,5 @@ pyyaml>=6.0
 python-dotenv>=1.0.0
 httpx>=0.24.0
 vaderSentiment>=3.3.2
+rank_bm25>=0.2.2
+yfinance>=0.2.36

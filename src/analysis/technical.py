@@ -28,6 +28,7 @@ class TechnicalSignal:
     ema_50: float
     ema_200: float
     atr: float
+    confidence: float = 1.0  # 0.0-1.0, indicator agreement level
     entry_price: Optional[float] = None
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
@@ -56,11 +57,12 @@ class TechnicalAnalyzer:
 
         latest_close = float(close.iloc[-1])
 
-        # Calculate composite score
-        score = self._compute_score(
+        # Calculate composite score and confidence
+        score, confidence = self._compute_score(
             rsi=rsi, macd=macd, macd_signal=macd_signal,
             close=latest_close, bb_upper=bb_upper, bb_lower=bb_lower,
             ema_20=ema_20, ema_50=ema_50, ema_200=ema_200,
+            num_bars=len(close),
         )
 
         # Determine trend
@@ -90,6 +92,7 @@ class TechnicalAnalyzer:
             timeframe=timeframe,
             score=round(score, 4),
             trend=trend,
+            confidence=round(confidence, 4),
             rsi=round(rsi, 2),
             macd=round(macd, 4),
             macd_signal=round(macd_signal, 4),
@@ -107,53 +110,85 @@ class TechnicalAnalyzer:
         )
 
     def _compute_score(self, rsi, macd, macd_signal, close, bb_upper, bb_lower,
-                       ema_20, ema_50, ema_200) -> float:
-        """Compute momentum/trend composite score from -1.0 to 1.0.
+                       ema_20, ema_50, ema_200, num_bars: int = 90) -> tuple[float, float]:
+        """Compute momentum/trend composite score from -1.0 to 1.0 plus confidence.
 
-        Positive = bullish momentum (buy), Negative = bearish momentum (short).
+        Returns (score, confidence) where confidence indicates indicator agreement.
+        Positive score = bullish momentum (buy), Negative = bearish momentum (short).
         """
         score = 0.0
 
+        # Track each component's direction for confidence calculation
+        component_signs = []
+
         # RSI momentum component (weight: 0.25)
-        # 50-70 = healthy uptrend, 30-50 = healthy downtrend
-        # >80 / <20 = trend exhaustion risk
+        rsi_component = 0.0
         if 50 <= rsi <= 70:
-            score += 0.25 * ((rsi - 50) / 20)
+            rsi_component = 0.25 * ((rsi - 50) / 20)
         elif 70 < rsi <= 80:
-            score += 0.25 * 0.8
+            rsi_component = 0.25 * 0.8
         elif rsi > 80:
-            score += 0.25 * 0.3
+            rsi_component = 0.25 * 0.3
         elif 30 <= rsi < 50:
-            score -= 0.25 * ((50 - rsi) / 20)
+            rsi_component = -0.25 * ((50 - rsi) / 20)
         elif 20 <= rsi < 30:
-            score -= 0.25 * 0.8
+            rsi_component = -0.25 * 0.8
         elif rsi < 20:
-            score -= 0.25 * 0.3
+            rsi_component = -0.25 * 0.3
+        score += rsi_component
+        if abs(rsi_component) > 0.01:
+            component_signs.append(1 if rsi_component > 0 else -1)
 
         # MACD crossover (weight: 0.25)
         if macd > macd_signal:
             score += 0.25
+            component_signs.append(1)
         else:
             score -= 0.25
+            component_signs.append(-1)
 
         # Bollinger Band trend component (weight: 0.25)
-        # Near upper band = bullish trend strength
-        # Near lower band = bearish trend strength
+        bb_component = 0.0
         bb_range = bb_upper - bb_lower
         if bb_range > 0:
             bb_position = (close - bb_lower) / bb_range
             if bb_position > 0.8:
-                score += 0.25 * min(1.0, (bb_position - 0.5) * 2)
+                bb_component = 0.25 * min(1.0, (bb_position - 0.5) * 2)
             elif bb_position < 0.2:
-                score -= 0.25 * min(1.0, (0.5 - bb_position) * 2)
+                bb_component = -0.25 * min(1.0, (0.5 - bb_position) * 2)
+        score += bb_component
+        if abs(bb_component) > 0.01:
+            component_signs.append(1 if bb_component > 0 else -1)
 
         # EMA alignment (weight: 0.25)
         if ema_20 > ema_50 > ema_200:
             score += 0.25
+            component_signs.append(1)
         elif ema_20 < ema_50 < ema_200:
             score -= 0.25
+            component_signs.append(-1)
+        # Mixed EMA = no clear direction, no entry in component_signs
 
-        return max(-1.0, min(1.0, score))
+        # ── Confidence calculation ────────────────
+        # Based on indicator direction agreement + data sufficiency
+        if len(component_signs) >= 2:
+            positive = sum(1 for s in component_signs if s > 0)
+            negative = sum(1 for s in component_signs if s < 0)
+            total = len(component_signs)
+            majority = max(positive, negative)
+            # All agree → 1.0, 3:1 → 0.8, 2:2 → 0.5, 1:3 → 0.3
+            agreement_ratio = majority / total
+            confidence = 0.3 + 0.7 * ((agreement_ratio - 0.5) / 0.5) if agreement_ratio > 0.5 else 0.3
+        else:
+            confidence = 0.3
+
+        # Penalize insufficient data (< 50 bars)
+        if num_bars < 50:
+            confidence *= 0.6
+
+        confidence = max(0.1, min(1.0, confidence))
+
+        return max(-1.0, min(1.0, score)), confidence
 
     @staticmethod
     def _rsi(close: pd.Series, period: int = 14) -> float:
