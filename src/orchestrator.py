@@ -20,8 +20,10 @@ from src.analysis.technical import TechnicalAnalyzer
 from src.analysis.sentiment import SentimentAnalyzer
 from src.analysis.screener import SymbolScreener
 from src.analysis.position_reviewer import PositionReviewer
+from src.analysis.fundamentals import FundamentalsAnalyzer
 from src.risk.manager import RiskManager
 from src.notifications.telegram import TelegramNotifier
+from src.memory.situation_memory import SituationMemory
 
 
 class TradingOrchestrator:
@@ -56,6 +58,17 @@ class TradingOrchestrator:
         self.state_dir.mkdir(exist_ok=True)
         self.log_dir = Path("logs")
         self.log_dir.mkdir(exist_ok=True)
+
+        # Fundamentals analyzer (optional — requires yfinance)
+        self.fundamentals_analyzer = FundamentalsAnalyzer()
+
+        # Memory banks (BM25-based, one per decision role)
+        mem_dir = self.config.get("memory", {}).get("storage_dir", "memory_store")
+        self.bull_memory = SituationMemory("bull_memory", mem_dir)
+        self.bear_memory = SituationMemory("bear_memory", mem_dir)
+        self.research_judge_memory = SituationMemory("research_judge_memory", mem_dir)
+        self.risk_judge_memory = SituationMemory("risk_judge_memory", mem_dir)
+        self.decision_engine_memory = SituationMemory("decision_engine_memory", mem_dir)
 
         # Bar data cache to avoid duplicate API calls
         self._bar_cache = {}
@@ -178,9 +191,69 @@ class TradingOrchestrator:
             except Exception as e:
                 print(f"  ❌ {symbol}: Error - {e}")
 
+        # Detect market regime and include in market data
+        market_data["market_regime"] = self._detect_market_regime()
+        print(f"\n  📈 Market Regime: {market_data['market_regime']}")
+
         # Save to shared state
         self._save_state("market_overview.json", market_data)
         return market_data
+
+    def _detect_market_regime(self) -> str:
+        """Determine market regime (risk_on / risk_off / neutral) using SPY EMA alignment."""
+        try:
+            spy_bars = self._get_bars("SPY", "stock", lookback_days=250)
+            if spy_bars is None or len(spy_bars) < 200:
+                return "neutral"
+
+            close = spy_bars["close"].astype(float)
+            ema20 = float(close.ewm(span=20, adjust=False).mean().iloc[-1])
+            ema50 = float(close.ewm(span=50, adjust=False).mean().iloc[-1])
+            ema200 = float(close.ewm(span=200, adjust=False).mean().iloc[-1])
+
+            if ema20 > ema50 > ema200:
+                return "risk_on"
+            elif ema20 < ema50 < ema200:
+                return "risk_off"
+            return "neutral"
+        except Exception:
+            return "neutral"
+
+    def _get_regime_weights(self, regime: str) -> dict:
+        """Return scoring weights adjusted for the current market regime.
+
+        Implements the regime adjustment specified in decision_engine.md.
+        """
+        base_tech = self.weights.get("technical_analyst", 0.35)
+        base_mkt = self.weights.get("market_analyst", 0.20)
+        base_sent = self.weights.get("sentiment_analyst", 0.15)
+
+        if regime == "risk_on":
+            return {"tech": base_tech * 1.2, "market": base_mkt * 0.8, "sentiment": base_sent * 1.1}
+        elif regime == "risk_off":
+            return {"tech": base_tech, "market": base_mkt * 1.3, "sentiment": base_sent}
+        return {"tech": base_tech, "market": base_mkt, "sentiment": base_sent}
+
+    # ══════════════════════════════════════════════
+    # Fundamentals Analyst (Phase 2.5 — Top-N only)
+    # ══════════════════════════════════════════════
+
+    def run_fundamentals_analyst(self, symbols: list[str]) -> dict:
+        """Fetch fundamental data for debate candidates (Top-N symbols only)."""
+        print("\n" + "=" * 60)
+        print("📋 Fundamentals Analyst - Fetching Data for Top-N Debate Candidates")
+        print("=" * 60)
+
+        results = self.fundamentals_analyzer.analyze_batch(symbols)
+        output = {
+            "timestamp": datetime.now().isoformat(),
+            "signals": {
+                sym: sig.to_dict() if sig else None
+                for sym, sig in results.items()
+            },
+        }
+        self._save_state("fundamentals_signals.json", output)
+        return output
 
     # ══════════════════════════════════════════════
     # Agent 2: Technical Analyst
@@ -424,11 +497,12 @@ class TradingOrchestrator:
         """
         Aggregate signals from all agents and generate trade candidates.
 
-        Scoring weights (from config):
-        - Technical: 35%
-        - Market (trend context): 20%
-        - Sentiment: 15%
-        - Risk: 30% (veto power)
+        Uses market regime-adjusted weights and confidence-weighted scoring.
+        Scoring weights (from config, adjusted by regime):
+        - Technical: 35% base
+        - Market (trend context): 20% base
+        - Sentiment: 15% base
+        - Risk: 30% (veto power, not in scoring)
         """
         print("\n" + "=" * 60)
         print("🧠 Decision Engine - Aggregating Signals")
@@ -438,114 +512,81 @@ class TradingOrchestrator:
         min_sell = self.decision_cfg.get("min_score_to_sell", min_buy)
         candidates = []
 
+        # Get regime-adjusted weights
+        regime = "neutral"
+        if market_data:
+            regime = market_data.get("market_regime", "neutral")
+        rw = self._get_regime_weights(regime)
+        print(f"  📈 Regime: {regime} → weights: tech={rw['tech']:.3f} mkt={rw['market']:.3f} sent={rw['sentiment']:.3f}")
+
+        def _score_symbol(symbol, signal, sent_data, mkt_score, asset_type):
+            tech_score = signal.get("score", 0)
+            tech_conf = signal.get("confidence", 1.0)
+            sent_score = sent_data.get("score", 0) if sent_data else 0
+            sent_conf = sent_data.get("confidence", 1.0) if sent_data else 0.2
+            mkt_conf = 1.0  # Market score is always based on full bar data
+
+            # Confidence-weighted composite (regime-adjusted weights)
+            weighted_tech = tech_score * rw["tech"] * tech_conf
+            weighted_mkt = mkt_score * rw["market"] * mkt_conf
+            weighted_sent = sent_score * rw["sentiment"] * sent_conf
+            total_weight = rw["tech"] * tech_conf + rw["market"] * mkt_conf + rw["sentiment"] * sent_conf
+
+            composite = (weighted_tech + weighted_mkt + weighted_sent) / total_weight if total_weight > 0 else 0
+            composite = max(-1.0, min(1.0, composite))
+
+            order_symbol = symbol.replace("/", "") if asset_type == "crypto" else symbol
+
+            if composite >= min_buy or composite <= -min_sell:
+                side = "buy" if composite >= min_buy else "sell"
+                emoji = "🟢" if side == "buy" else "🔴"
+                print(f"  {emoji} {symbol}: composite={composite:.3f} (conf: tech={tech_conf:.2f} sent={sent_conf:.2f}) → {side.upper()} CANDIDATE")
+                return {
+                    "symbol": order_symbol,
+                    "asset_type": asset_type,
+                    "side": side,
+                    "composite_score": round(composite, 4),
+                    "tech_score": tech_score,
+                    "tech_confidence": tech_conf,
+                    "sentiment_score": sent_score,
+                    "sentiment_confidence": sent_conf,
+                    "market_score": mkt_score,
+                    "entry_price": signal.get("entry_price"),
+                    "stop_loss": signal.get("stop_loss"),
+                    "take_profit": signal.get("take_profit"),
+                    "trend": signal.get("trend"),
+                    "rsi": signal.get("rsi"),
+                }
+            else:
+                print(f"  ⏭️  {symbol}: composite={composite:.3f} → Skip")
+                return None
+
         # Process stocks
         for symbol, signal in tech_signals.get("stocks", {}).items():
-            tech_score = signal.get("score", 0)
-            sent_score = sentiment.get("symbols", {}).get(symbol, {}).get("score", 0)
+            sent_data = sentiment.get("symbols", {}).get(symbol, {})
             mkt_score = 0.0
             if market_data:
                 mkt_score = market_data.get("stocks", {}).get(symbol, {}).get("market_score", 0.0)
-
-            # Weighted composite
-            composite = (
-                tech_score * self.weights.get("technical_analyst", 0.35)
-                + mkt_score * self.weights.get("market_analyst", 0.20)
-                + sent_score * self.weights.get("sentiment_analyst", 0.15)
-            ) / (1 - self.weights.get("risk_manager", 0.30))  # Normalize without risk weight
-
-            composite = max(-1.0, min(1.0, composite))
-
-            if composite >= min_buy:
-                candidates.append({
-                    "symbol": symbol,
-                    "asset_type": "stock",
-                    "side": "buy",
-                    "composite_score": round(composite, 4),
-                    "tech_score": tech_score,
-                    "sentiment_score": sent_score,
-                    "market_score": mkt_score,
-                    "entry_price": signal.get("entry_price"),
-                    "stop_loss": signal.get("stop_loss"),
-                    "take_profit": signal.get("take_profit"),
-                    "trend": signal.get("trend"),
-                    "rsi": signal.get("rsi"),
-                })
-                print(f"  🟢 {symbol}: composite={composite:.3f} → BUY CANDIDATE")
-            elif composite <= -min_sell:
-                candidates.append({
-                    "symbol": symbol,
-                    "asset_type": "stock",
-                    "side": "sell",
-                    "composite_score": round(composite, 4),
-                    "tech_score": tech_score,
-                    "sentiment_score": sent_score,
-                    "market_score": mkt_score,
-                    "entry_price": signal.get("entry_price"),
-                    "stop_loss": signal.get("stop_loss"),
-                    "take_profit": signal.get("take_profit"),
-                    "trend": signal.get("trend"),
-                    "rsi": signal.get("rsi"),
-                })
-                print(f"  🔴 {symbol}: composite={composite:.3f} → SELL CANDIDATE")
-            else:
-                print(f"  ⏭️  {symbol}: composite={composite:.3f} → Skip")
+            result = _score_symbol(symbol, signal, sent_data, mkt_score, "stock")
+            if result:
+                candidates.append(result)
 
         # Process crypto
         for symbol, signal in tech_signals.get("crypto", {}).items():
-            tech_score = signal.get("score", 0)
-            sent_score = sentiment.get("symbols", {}).get(symbol, {}).get("score", 0)
+            sent_data = sentiment.get("symbols", {}).get(symbol, {})
             mkt_score = 0.0
             if market_data:
                 mkt_score = market_data.get("crypto", {}).get(symbol, {}).get("market_score", 0.0)
-
-            composite = (
-                tech_score * self.weights.get("technical_analyst", 0.35)
-                + mkt_score * self.weights.get("market_analyst", 0.20)
-                + sent_score * self.weights.get("sentiment_analyst", 0.15)
-            ) / (1 - self.weights.get("risk_manager", 0.30))
-
-            composite = max(-1.0, min(1.0, composite))
-
-            if composite >= min_buy:
-                candidates.append({
-                    "symbol": symbol.replace("/", ""),  # Alpaca uses BTCUSD not BTC/USD for orders
-                    "asset_type": "crypto",
-                    "side": "buy",
-                    "composite_score": round(composite, 4),
-                    "tech_score": tech_score,
-                    "sentiment_score": sent_score,
-                    "market_score": mkt_score,
-                    "entry_price": signal.get("entry_price"),
-                    "stop_loss": signal.get("stop_loss"),
-                    "take_profit": signal.get("take_profit"),
-                    "trend": signal.get("trend"),
-                    "rsi": signal.get("rsi"),
-                })
-                print(f"  🟢 {symbol}: composite={composite:.3f} → BUY CANDIDATE")
-            elif composite <= -min_sell:
-                candidates.append({
-                    "symbol": symbol.replace("/", ""),
-                    "asset_type": "crypto",
-                    "side": "sell",
-                    "composite_score": round(composite, 4),
-                    "tech_score": tech_score,
-                    "sentiment_score": sent_score,
-                    "market_score": mkt_score,
-                    "entry_price": signal.get("entry_price"),
-                    "stop_loss": signal.get("stop_loss"),
-                    "take_profit": signal.get("take_profit"),
-                    "trend": signal.get("trend"),
-                    "rsi": signal.get("rsi"),
-                })
-                print(f"  🔴 {symbol}: composite={composite:.3f} → SELL CANDIDATE")
-            else:
-                print(f"  ⏭️  {symbol}: composite={composite:.3f} → Skip")
+            result = _score_symbol(symbol, signal, sent_data, mkt_score, "crypto")
+            if result:
+                candidates.append(result)
 
         # Sort by absolute score (strongest signals first)
         candidates.sort(key=lambda x: abs(x["composite_score"]), reverse=True)
 
         self._save_state("decisions.json", {
             "timestamp": datetime.now().isoformat(),
+            "market_regime": regime,
             "candidates": candidates,
             "min_score_threshold": min_buy,
         })

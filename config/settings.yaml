@@ -86,3 +86,14 @@ position_exit:
   atr_multiplier: 2.0         # Trailing stop = recent_high - multiplier * ATR
   trailing_lookback_bars: 10   # Bars to look back for recent high/low
 
+# Debate settings (Agent Teams mode only — skipped in standalone mode)
+debate:
+  top_n: 3                    # Top-N candidates enter investment debate
+  investment_rounds: 1        # Bull/Bear debate rounds per candidate
+  risk_rounds: 1              # Aggressive/Conservative/Neutral rounds per trade
+
+# Memory settings (BM25-based learning system)
+memory:
+  storage_dir: memory_store   # Directory for memory JSON files
+  max_memories: 500           # Max entries per memory bank before pruning
+

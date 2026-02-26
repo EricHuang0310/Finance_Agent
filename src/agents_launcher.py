@@ -22,6 +22,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.alpaca_client import AlpacaClient
 from src.orchestrator import TradingOrchestrator
 from src.notifications.telegram import TelegramNotifier
+from src.debate.helpers import (
+    task_prepare_debate_context,
+    task_prepare_risk_context,
+    task_merge_debate_results,
+    task_merge_risk_debate_results,
+)
+from src.memory.reflection import (
+    get_unreflected_trades,
+    task_prepare_reflection_context,
+    task_save_reflections,
+)
 
 
 # ══════════════════════════════════════════════
@@ -299,6 +310,85 @@ def task_send_report():
 
 
 # ══════════════════════════════════════════════
+# Debate & Reflection Task Functions
+# Called by Claude Agent Teams Lead agent
+# ══════════════════════════════════════════════
+
+def task_fundamentals_analyst(symbols: list[str]) -> dict:
+    """Fetch fundamentals for Top-N debate candidates."""
+    print(f"📋 [Fundamentals] Fetching data for {symbols}...")
+    orch = get_orchestrator()
+    result = orch.run_fundamentals_analyst(symbols)
+    print(f"📋 [Fundamentals] ✅ Complete: {len(result.get('signals', {}))} symbols")
+    return result
+
+
+def task_prepare_debate(symbol: str) -> dict:
+    """Prepare debate context for a single symbol. Called before spawning Bull/Bear/Judge."""
+    print(f"📝 [Debate Prep] Assembling context for {symbol}...")
+    orch = get_orchestrator()
+    context = task_prepare_debate_context(symbol, orch)
+    print(f"📝 [Debate Prep] ✅ Context saved to shared_state/debate_context_{symbol}.json")
+    return context
+
+
+def task_merge_debates(candidates: list[dict]) -> list[dict]:
+    """Merge investment debate score_adjustments back into candidates."""
+    print("🔀 [Debate Merge] Merging debate results...")
+    result = task_merge_debate_results(candidates)
+    print(f"🔀 [Debate Merge] ✅ Merged {len(result)} candidates")
+    return result
+
+
+def task_prepare_risk_debate(trade: dict) -> dict:
+    """Prepare risk debate context for a single approved trade."""
+    symbol = trade.get("symbol", "")
+    print(f"📝 [Risk Debate Prep] Assembling context for {symbol}...")
+    orch = get_orchestrator()
+    context = task_prepare_risk_context(trade, orch)
+    print(f"📝 [Risk Debate Prep] ✅ Context saved to shared_state/risk_debate_context_{symbol}.json")
+    return context
+
+
+def task_merge_risk_debates(trades: list[dict]) -> list[dict]:
+    """Merge risk debate qty_ratio and adjusted stop/target into trades."""
+    print("🔀 [Risk Debate Merge] Merging risk debate results...")
+    result = task_merge_risk_debate_results(trades)
+    print(f"🔀 [Risk Debate Merge] ✅ Merged {len(result)} trades")
+    return result
+
+
+def task_check_reflections() -> list[dict]:
+    """Check for closed trades that need post-trade reflection."""
+    print("🔍 [Reflection] Checking for unreflected trades...")
+    trades = get_unreflected_trades()
+    print(f"🔍 [Reflection] Found {len(trades)} trade(s) needing reflection")
+    return trades
+
+
+def task_prepare_reflection(trade_record: dict) -> dict:
+    """Prepare reflection context for a single closed trade."""
+    trade_id = trade_record.get("order_id", "unknown")
+    print(f"📝 [Reflection Prep] Assembling context for trade {trade_id}...")
+    orch = get_orchestrator()
+    context = task_prepare_reflection_context(trade_record, orch)
+    print(f"📝 [Reflection Prep] ✅ Context saved")
+    return context
+
+
+def task_save_reflection_results(trade_id: str) -> bool:
+    """Save reflection results into memory banks."""
+    print(f"💾 [Reflection Save] Saving lessons for trade {trade_id}...")
+    orch = get_orchestrator()
+    success = task_save_reflections(trade_id, orch)
+    if success:
+        print(f"💾 [Reflection Save] ✅ Lessons saved to memory banks")
+    else:
+        print(f"💾 [Reflection Save] ⚠️  No reflection result found for {trade_id}")
+    return success
+
+
+# ══════════════════════════════════════════════
 # Full Pipeline (standalone mode)
 # ══════════════════════════════════════════════
 
@@ -343,10 +433,22 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
             notifier.send("📭 *Pipeline Complete*\nNo trade candidates meet threshold.")
         return
 
+    # Phase 2.5: Fundamentals for Top-N (standalone mode — no debate)
+    # In Agent Teams mode, this is followed by Investment Debate (Phase 2.6)
+    debate_cfg = orch.config.get("debate", {})
+    top_n = debate_cfg.get("top_n", 3)
+    top_symbols = [c["symbol"] for c in candidates[:top_n]]
+    if top_symbols:
+        task_fundamentals_analyst(top_symbols)
+    print("  ℹ️  Standalone mode: Investment Debate (Phase 2.6) skipped — use Agent Teams for debate")
+
     # Phase 3: Risk assessment
     assessed = task_risk_manager(candidates)
     approved = [t for t in assessed if t.get("approved")]
     rejected = [t for t in assessed if not t.get("approved")]
+
+    # Phase 3.5: Risk Debate skipped in standalone mode
+    print("  ℹ️  Standalone mode: Risk Debate (Phase 3.5) skipped — use Agent Teams for debate")
 
     # Phase 4: Notify
     if notify:
@@ -374,6 +476,19 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
         if approved:
             print("   Run with --trade flag to execute orders")
 
+    # Phase 6: Reflection — check for unreflected closed trades
+    try:
+        unreflected = task_check_reflections()
+        if unreflected:
+            print(f"\n🔄 Phase 6: Reflecting on {len(unreflected)} closed trade(s)...")
+            for trade_record in unreflected:
+                task_prepare_reflection(trade_record)
+                # In standalone mode, reflection-analyst teammate is not available.
+                # The reflection context is prepared for manual review or next Agent Teams run.
+            print("  ℹ️  Standalone mode: Reflection Analyst skipped — contexts prepared for Agent Teams")
+    except Exception as e:
+        print(f"  ⚠️  Reflection check skipped: {e}")
+
     return assessed
 
 
@@ -384,7 +499,10 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
 AGENT_TEAMS_PROMPT = """
 # ─── Copy this into Claude Code after enabling Agent Teams ───
 
-啟動一個 trading-analysis agent team 來分析市場並生成交易建議：
+啟動一個 trading-analysis agent team 來分析市場並生成交易建議。
+此 pipeline 包含投資辯論和風控辯論環節，模擬真實投資團隊的決策流程。
+
+---
 
 ## Phase 0 (Symbol Discovery, 如果 watchlist_mode == "dynamic")
 先執行 Symbol Screener 來自動篩選標的：
@@ -395,48 +513,54 @@ AGENT_TEAMS_PROMPT = """
    from src.agents_launcher import task_symbol_screener
    result = task_symbol_screener()
    # result 寫入 shared_state/dynamic_watchlist.json
-   # 後續所有 Agent 將使用此動態 watchlist
    ```
 
-## Phase 1 (Parallel, 等 Phase 0 完成)
+---
+
+## Phase 1 (Parallel Analysts, 等 Phase 0 完成)
 同時 spawn 以下 3 個 agents：
 
-1. **market-analyst** - 讀取 agents/market_analyst.md 的指令，
-   然後執行:
+1. **market-analyst** - 讀取 agents/market_analyst.md，執行:
    ```python
    from src.agents_launcher import task_market_analyst
    task_market_analyst()
+   # 包含 Market Regime Detection (SPY EMA alignment)
+   # 結果寫入 shared_state/market_overview.json（含 market_regime 欄位）
    ```
 
-2. **tech-analyst** - 讀取 agents/technical_analyst.md 的指令，
-   然後執行:
+2. **tech-analyst** - 讀取 agents/technical_analyst.md，執行:
    ```python
    from src.agents_launcher import task_technical_analyst
    task_technical_analyst()
+   # 結果含 confidence 信心度 (0.0-1.0)
    ```
 
 3. **sentiment-analyst** - 執行:
    ```python
    from src.agents_launcher import task_sentiment_analyst
    task_sentiment_analyst()
+   # 結果含 confidence 信心度 (基於新聞數量)
    ```
 
-## Phase 1.5 (Position Exit Review, 等 Phase 1 全部完成)
-審查現有持倉是否需要平倉：
+---
 
-3.5. **position-reviewer** - 讀取 agents/position_reviewer.md 的指令，
-   然後執行:
+## Phase 1.5 (Position Exit Review, 等 Phase 1 全部完成)
+
+4. **position-reviewer** - 讀取 agents/position_reviewer.md，執行:
    ```python
    from src.agents_launcher import task_position_review
    exit_candidates = task_position_review()
-   # 結果寫入 shared_state/exit_review.json
-   # 如有需要平倉的持倉，傳給 Executor 優先處理
+   # 如有需要平倉的持倉：
+   if exit_candidates:
+       from src.agents_launcher import task_execute_exits
+       task_execute_exits(exit_candidates)
    ```
 
-## Phase 2 (Sequential, 等 Phase 1.5 完成)
+---
 
-4. 我 (Lead) 讀取 shared_state/ 中的所有 JSON 結果，
-   執行 Decision Engine:
+## Phase 2 (Decision Engine, 等 Phase 1.5 完成)
+
+5. 我 (Lead) 執行 Decision Engine（含 confidence 加權 + regime 動態權重）：
    ```python
    from src.agents_launcher import task_generate_decisions
    import json
@@ -449,35 +573,157 @@ AGENT_TEAMS_PROMPT = """
    candidates = task_generate_decisions(tech, sent, market)
    ```
 
-5. **risk-manager** - 讀取 agents/risk_manager.md 的指令，
-   對 candidates 執行風控驗證:
+---
+
+## Phase 2.5 (Fundamentals + Investment Debate, 取 Top-N 候選)
+
+6. 我 (Lead) 為 Top-N 候選取得基本面資料：
    ```python
-   from src.agents_launcher import task_risk_manager
-   assessed = task_risk_manager(candidates)
+   from src.agents_launcher import task_fundamentals_analyst, task_prepare_debate
+   import yaml
+   with open('config/settings.yaml') as f:
+       cfg = yaml.safe_load(f)
+   top_n = cfg.get('debate', {}).get('top_n', 3)
+   top_symbols = [c['symbol'] for c in candidates[:top_n]]
+   task_fundamentals_analyst(top_symbols)
    ```
 
-## Phase 3 (Execution, 等 Phase 2 全部完成)
-
-6. **executor** - 讀取 agents/executor.md 的指令，
-   對所有 approved 的交易下單:
+7. 我 (Lead) 為每個 Top-N 候選準備辯論上下文：
    ```python
-   from src.agents_launcher import task_execute_trades
-   import json
-   with open('shared_state/risk_assessment.json') as f:
-       risk_data = json.load(f)
-   # assessed list 需要從 risk_manager 的輸出中取得
-   executed = task_execute_trades(assessed)
+   for symbol in top_symbols:
+       task_prepare_debate(symbol)
    ```
 
-## Phase 4 (Report)
+### 投資辯論（對每個 Top-N 候選，可並行）
 
-7. 發送 Telegram 通知:
+對每個候選 symbol，依序 spawn 以下 teammates：
+
+8a. **bull-researcher-{symbol}** - 讀取 agents/bull_researcher.md
+    → 讀取 shared_state/debate_context_{symbol}.json
+    → 用 Claude 推理寫出看多論點
+    → 寫入 shared_state/debate_{symbol}_bull_r1.json
+
+8b. **bear-researcher-{symbol}** (等 bull 完成)
+    → 讀取 agents/bear_researcher.md + bull 論點
+    → 用 Claude 推理寫出看空論點 + 反駁
+    → 寫入 shared_state/debate_{symbol}_bear_r1.json
+
+8c. **research-judge-{symbol}** (等 bear 完成)
+    → 讀取 agents/research_judge.md + 完整辯論紀錄
+    → 裁決 BUY/SELL/HOLD + score_adjustment (-0.5 ~ +0.5)
+    → 寫入 shared_state/debate_{symbol}_result.json
+
+9. 我 (Lead) 合併辯論結果：
    ```python
-   from src.agents_launcher import task_send_report
-   task_send_report()
+   from src.agents_launcher import task_merge_debates
+   candidates = task_merge_debates(candidates)
    ```
 
-最後匯報所有結果給我，包括已下單的交易明細。
+---
+
+## Phase 3 (Risk Manager 硬性規則, 等 Phase 2.5 完成)
+
+10. **risk-manager** - 讀取 agents/risk_manager.md，對候選執行硬性風控驗證:
+    ```python
+    from src.agents_launcher import task_risk_manager
+    assessed = task_risk_manager(candidates)
+    approved = [t for t in assessed if t.get('approved')]
+    ```
+
+---
+
+## Phase 3.5 (Risk Debate, 對每筆通過硬規則的交易)
+
+11. 我 (Lead) 為每筆 approved 交易準備風控辯論上下文：
+    ```python
+    from src.agents_launcher import task_prepare_risk_debate
+    for trade in approved:
+        task_prepare_risk_debate(trade)
+    ```
+
+### 風控辯論（對每筆 approved 交易，可並行）
+
+12a. **aggressive-analyst-{symbol}** - 讀取 agents/aggressive_analyst.md
+     → 讀取 shared_state/risk_debate_context_{symbol}.json
+     → 主張接受較高風險，強調機會成本
+     → 寫入 shared_state/risk_debate_{symbol}_aggressive.json
+
+12b. **conservative-analyst-{symbol}** (等 aggressive 完成)
+     → 讀取 agents/conservative_analyst.md + aggressive 論點
+     → 主張縮減曝險，強調下行風險
+     → 寫入 shared_state/risk_debate_{symbol}_conservative.json
+
+12c. **neutral-analyst-{symbol}** (等 conservative 完成)
+     → 讀取 agents/neutral_analyst.md + aggressive + conservative 論點
+     → 提出平衡觀點
+     → 寫入 shared_state/risk_debate_{symbol}_neutral.json
+
+12d. **risk-judge-{symbol}** (等 neutral 完成)
+     → 讀取 agents/risk_judge.md + 三方辯論紀錄
+     → 裁決最終 qty_ratio (0.5~1.0) + 調整 stop_loss / take_profit
+     → 寫入 shared_state/risk_debate_{symbol}_result.json
+
+13. 我 (Lead) 合併風控辯論結果：
+    ```python
+    from src.agents_launcher import task_merge_risk_debates
+    approved = task_merge_risk_debates(approved)
+    ```
+
+---
+
+## Phase 4 (Execution, 等 Phase 3.5 完成)
+
+14. **executor** - 讀取 agents/executor.md，下單:
+    ```python
+    from src.agents_launcher import task_execute_trades
+    executed = task_execute_trades(approved)
+    ```
+
+---
+
+## Phase 5 (Report)
+
+15. 發送 Telegram 通知（含辯論摘要）:
+    ```python
+    from src.agents_launcher import task_send_report
+    task_send_report()
+    ```
+
+---
+
+## Phase 6 (Reflection & Memory Update)
+
+16. 我 (Lead) 檢查是否有已平倉但尚未反思的交易：
+    ```python
+    from src.agents_launcher import task_check_reflections, task_prepare_reflection, task_save_reflection_results
+    unreflected = task_check_reflections()
+    ```
+
+17. 對每筆需反思的交易 spawn **reflection-analyst**：
+    ```python
+    for trade_record in unreflected:
+        task_prepare_reflection(trade_record)
+    ```
+
+    17a. **reflection-analyst-{trade_id}** - 讀取 agents/reflection_analyst.md
+         → 讀取 shared_state/reflection_context_{trade_id}.json
+         → 分析決策正確性、萃取教訓
+         → 寫入 shared_state/reflection_{trade_id}_result.json
+
+18. 我 (Lead) 儲存反思結果到記憶庫：
+    ```python
+    for trade_record in unreflected:
+        trade_id = trade_record.get('order_id', 'unknown')
+        task_save_reflection_results(trade_id)
+    ```
+
+---
+
+最後匯報所有結果給我，包括：
+- 辯論摘要（各候選的 Bull/Bear 核心論點和 Judge 裁決）
+- 風控辯論摘要（各交易的倉位調整和理由）
+- 已下單的交易明細
+- 反思結果（如有）
 """
 
 

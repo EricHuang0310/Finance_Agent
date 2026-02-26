@@ -90,9 +90,21 @@ class SentimentAnalyzer:
 
         label = "bullish" if score > 0.15 else "bearish" if score < -0.15 else "neutral"
 
+        # Confidence based on article count — more data = higher confidence
+        news_count = len(articles)
+        if news_count == 0:
+            confidence = 0.2
+        elif news_count <= 3:
+            confidence = 0.5
+        elif news_count <= 9:
+            confidence = 0.8
+        else:
+            confidence = 1.0
+
         return {
             "score": round(score, 4),
-            "news_count": len(articles),
+            "confidence": round(confidence, 2),
+            "news_count": news_count,
             "sentiment": label,
             "top_headlines": top_headlines,
         }
