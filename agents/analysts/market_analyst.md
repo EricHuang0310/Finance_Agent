@@ -30,22 +30,33 @@ market_score = 0.5 × vol_score + 0.5 × range_score
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_market_analyst
-
+from src.agents_launcher import task_market_analyst
 result = task_market_analyst()
 # result 寫入 shared_state/market_overview.json
 ```
 
-## 輸出格式
+## 輸入參數
+無需額外輸入。函數內部從 `config/settings.yaml` 讀取 watchlist，透過 `AlpacaClient` 取得 K 線。
+
+## 輸出
+`shared_state/market_overview.json`：
 ```json
 {
   "timestamp": "...",
   "market_regime": "risk_on | risk_off | neutral",
   "stocks": {
-    "AAPL": {"latest_close": 185.5, "bars_count": 90, "market_score": 0.35, ...}
+    "AAPL": {
+      "latest_close": 185.5,
+      "latest_volume": 45000000,
+      "avg_volume_20d": 38000000,
+      "high_90d": 195.0,
+      "low_90d": 168.0,
+      "bars_count": 90,
+      "market_score": 0.35
+    }
   },
   "crypto": {
-    "BTC/USD": {"latest_close": 65000, "market_score": 0.42, ...}
+    "BTC/USD": {"latest_close": 65000, "market_score": 0.42}
   }
 }
 ```

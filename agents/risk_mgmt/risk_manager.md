@@ -23,11 +23,14 @@
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_risk_manager
-
+from src.agents_launcher import task_risk_manager
 candidates = [...]  # from decision engine (shared_state/decisions.json)
 assessed = task_risk_manager(candidates)
+# assessed: list[dict]，每筆含 approved、suggested_qty、reason
 ```
+
+## 輸入參數
+- `candidates: list[dict]` — 來自 Decision Engine 的交易候選列表
 
 ## Kill Switch 行為
 當日虧損達 3% 時：
@@ -37,10 +40,10 @@ assessed = task_risk_manager(candidates)
 4. 發送 Telegram 通知告知 Kill Switch 已觸發
 
 ## 你的權限
-- ✅ 批准交易（附帶 `approved_qty` 建議倉位大小）
-- ❌ 否決交易（附帶 `reason`）
-- 🚨 輸出 Kill Switch 標記（由 Executor 執行平倉操作）
-- ⛔ 宣布停止當日交易
+- 批准交易（附帶 `approved_qty` 建議倉位大小）
+- 否決交易（附帶 `reason`）
+- 輸出 Kill Switch 標記（由 Executor 執行平倉操作）
+- 宣布停止當日交易
 
 ## 倉位計算邏輯
 ```
@@ -52,7 +55,8 @@ approved_qty = int(remaining_room / entry_price)
 - 如果 `approved_qty <= 0`，拒絕交易（已無加倉空間）
 - 如果同標的已有持倉且曝險 ≥ max_position_pct，直接拒絕
 
-## 輸出格式
+## 輸出
+`shared_state/risk_assessment.json`：
 ```json
 {
   "timestamp": "...",
@@ -104,9 +108,6 @@ approved_qty = int(remaining_room / entry_price)
   "assessed": []
 }
 ```
-
-## 輸出
-`shared_state/risk_assessment.json`
 
 ## 核心原則
 **保護資本永遠優先於追求利潤。** 寧可錯過一筆好交易，也不要讓一筆壞交易傷害帳戶。

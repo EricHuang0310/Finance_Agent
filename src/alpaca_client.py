@@ -14,6 +14,19 @@ from dotenv import load_dotenv
 
 load_dotenv("config/.env")
 
+# Known crypto base symbols — used to detect crypto orders and set correct TimeInForce
+_CRYPTO_BASES = {"BTC", "ETH", "SOL", "DOGE", "AVAX", "LINK", "DOT", "MATIC", "ADA", "XRP",
+                 "LTC", "UNI", "AAVE", "SHIB", "BCH"}
+
+
+def _is_crypto_symbol(symbol: str) -> bool:
+    """Detect if a symbol is a crypto pair (e.g. BTCUSD, BTC/USD)."""
+    clean = symbol.replace("/", "")
+    if clean.endswith("USD"):
+        base = clean[:-3]
+        return base in _CRYPTO_BASES
+    return False
+
 
 class AlpacaClient:
     """Wrapper around Alpaca API for market data and trading."""
@@ -169,12 +182,13 @@ class AlpacaClient:
         from alpaca.trading.enums import OrderSide, TimeInForce
 
         order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+        tif = TimeInForce.GTC if _is_crypto_symbol(symbol) else TimeInForce.DAY
 
         request = MarketOrderRequest(
             symbol=symbol,
             qty=qty,
             side=order_side,
-            time_in_force=TimeInForce.DAY,
+            time_in_force=tif,
         )
 
         order = self.trading_client.submit_order(request)
@@ -193,12 +207,13 @@ class AlpacaClient:
         from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
 
         order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+        tif = TimeInForce.GTC if _is_crypto_symbol(symbol) else TimeInForce.DAY
 
         request = MarketOrderRequest(
             symbol=symbol,
             qty=qty,
             side=order_side,
-            time_in_force=TimeInForce.DAY,
+            time_in_force=tif,
             order_class=OrderClass.BRACKET,
             take_profit=TakeProfitRequest(limit_price=take_profit_price),
             stop_loss=StopLossRequest(stop_price=stop_loss_price),

@@ -17,11 +17,13 @@
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_execute_trades
-
+from src.agents_launcher import task_execute_trades
 assessed = [...]  # from risk manager (shared_state/risk_assessment.json)
 executed = task_execute_trades(assessed)
 ```
+
+## 輸入參數
+- `assessed: list[dict]` — 來自 Risk Manager 的風控評估結果
 
 ## Kill Switch 處理流程
 ```
@@ -53,12 +55,12 @@ assessed trades (from Risk Manager)
     │   │   └─ 無 → place_market_order(side=buy, qty=approved_qty)
     │   │
     │   └─ side = "sell" (做空 SHORT)
-    │       ├─ Easy to Borrow 檢查 ✅
+    │       ├─ Easy to Borrow 檢查
     │       │   ├─ 有 stop_loss + take_profit → place_bracket_order(side=sell, qty=approved_qty)
     │       │   │   止損在進場價上方，目標價在進場價下方
     │       │   └─ 無 → place_market_order(side=sell, qty=approved_qty)
     │       │
-    │       └─ Easy to Borrow 檢查 ❌
+    │       └─ Easy to Borrow 檢查 失敗
     │           └─ 跳過此交易，記錄原因 "Not easy to borrow"
     │
     └─ approved = false → 跳過
@@ -70,13 +72,6 @@ assessed trades (from Risk Manager)
 - `easy_to_borrow = false` → 跳過該交易，記錄警告
 - 加密貨幣不適用此檢查
 
-```python
-# 檢查方式（透過 Alpaca Asset API）
-asset = trading_client.get_asset(symbol)
-if not asset.easy_to_borrow:
-    skip and log "Symbol {symbol} is not easy to borrow, skipping short"
-```
-
 ## 做多 vs 做空 Bracket Order 差異
 
 | | 做多 (BUY) | 做空 (SELL) |
@@ -87,7 +82,11 @@ if not asset.easy_to_borrow:
 | 獲利條件 | 價格上漲 | 價格下跌 |
 | 前置檢查 | 無 | Easy to Borrow |
 
-## 輸出格式
+## 輸出
+- `shared_state/execution_results.json`
+- `logs/trade_log.json`（追加）
+- Telegram 通知（每筆成功/失敗/跳過）
+
 ```json
 {
   "timestamp": "...",
@@ -136,11 +135,6 @@ if not asset.easy_to_borrow:
   "trades": []
 }
 ```
-
-## 輸出
-- `shared_state/execution_results.json`
-- `logs/trade_log.json`（追加）
-- Telegram 通知（每筆成功/失敗/跳過）
 
 ## 安全規則
 - 僅執行通過 Risk Manager 審批（`approved = true`）的交易

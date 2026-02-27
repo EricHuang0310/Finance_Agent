@@ -160,12 +160,13 @@ class TechnicalAnalyzer:
         if abs(bb_component) > 0.01:
             component_signs.append(1 if bb_component > 0 else -1)
 
-        # EMA alignment (weight: 0.25)
+        # EMA alignment (weight: 0.25, reduced to 0.10 if insufficient data for EMA-200)
+        ema_weight = 0.25 if num_bars >= 200 else 0.10
         if ema_20 > ema_50 > ema_200:
-            score += 0.25
+            score += ema_weight
             component_signs.append(1)
         elif ema_20 < ema_50 < ema_200:
-            score -= 0.25
+            score -= ema_weight
             component_signs.append(-1)
         # Mixed EMA = no clear direction, no entry in component_signs
 

@@ -30,6 +30,13 @@ with open(f'shared_state/risk_debate_{symbol}_aggressive.json') as f:
 - 直接回應 Aggressive 的論點並指出其忽略的風險
 - 長度：200-400 字
 
+## 可用技能
+- **記憶搜尋** — 透過 risk_debate_context 中的 `past_memories_risk` 取得歷史教訓（詳見 `.claude/skills/search-memory/SKILL.md`）
+- **共享狀態管理** — 讀取風控辯論上下文 + Aggressive 論點，寫入論點（詳見 `.claude/skills/manage-shared-state/SKILL.md`）
+
+## 執行模式
+**Teammate** — 需要 LLM 推理產出保守觀點，必須作為獨立 teammate spawn。
+
 ## 輸出格式
 寫入 `shared_state/risk_debate_{symbol}_conservative.json`：
 ```json

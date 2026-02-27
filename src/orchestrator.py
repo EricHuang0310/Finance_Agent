@@ -48,7 +48,8 @@ class TradingOrchestrator:
         self.client = AlpacaClient()
         self.tech_analyzer = TechnicalAnalyzer()
         self.sentiment_analyzer = SentimentAnalyzer(self.client)
-        self.screener = SymbolScreener(self.client, self.config)
+        self.screener = SymbolScreener(self.client, self.config,
+                                       bars_getter=lambda sym, at, **kw: self._get_bars(sym, at, **kw))
         self.risk_manager = RiskManager(self.config)
         self.position_reviewer = PositionReviewer(self.config)
         self.notifier = TelegramNotifier()
@@ -63,12 +64,14 @@ class TradingOrchestrator:
         self.fundamentals_analyzer = FundamentalsAnalyzer()
 
         # Memory banks (BM25-based, one per decision role)
-        mem_dir = self.config.get("memory", {}).get("storage_dir", "memory_store")
-        self.bull_memory = SituationMemory("bull_memory", mem_dir)
-        self.bear_memory = SituationMemory("bear_memory", mem_dir)
-        self.research_judge_memory = SituationMemory("research_judge_memory", mem_dir)
-        self.risk_judge_memory = SituationMemory("risk_judge_memory", mem_dir)
-        self.decision_engine_memory = SituationMemory("decision_engine_memory", mem_dir)
+        mem_cfg = self.config.get("memory", {})
+        mem_dir = mem_cfg.get("storage_dir", "memory_store")
+        max_mem = mem_cfg.get("max_memories", 500)
+        self.bull_memory = SituationMemory("bull_memory", mem_dir, max_entries=max_mem)
+        self.bear_memory = SituationMemory("bear_memory", mem_dir, max_entries=max_mem)
+        self.research_judge_memory = SituationMemory("research_judge_memory", mem_dir, max_entries=max_mem)
+        self.risk_judge_memory = SituationMemory("risk_judge_memory", mem_dir, max_entries=max_mem)
+        self.decision_engine_memory = SituationMemory("decision_engine_memory", mem_dir, max_entries=max_mem)
 
         # Bar data cache to avoid duplicate API calls
         self._bar_cache = {}
@@ -267,10 +270,10 @@ class TradingOrchestrator:
 
         signals = {"stocks": {}, "crypto": {}, "timestamp": datetime.now().isoformat()}
 
-        # Stocks
+        # Stocks — use 300 days to get ~200 trading days for EMA-200 convergence
         for symbol in self.watchlist_stocks:
             try:
-                bars = self._get_bars(symbol, "stock")
+                bars = self._get_bars(symbol, "stock", lookback_days=300)
                 if bars is not None and len(bars) >= 50:
                     signal = self.tech_analyzer.analyze(bars, symbol, "1Day")
                     signals["stocks"][symbol] = signal.to_dict()
@@ -282,10 +285,10 @@ class TradingOrchestrator:
             except Exception as e:
                 print(f"  ❌ {symbol}: Error - {e}")
 
-        # Crypto
+        # Crypto — use 300 days for EMA-200 convergence
         for symbol in self.watchlist_crypto:
             try:
-                bars = self._get_bars(symbol, "crypto")
+                bars = self._get_bars(symbol, "crypto", lookback_days=300)
                 if bars is not None and len(bars) >= 50:
                     signal = self.tech_analyzer.analyze(bars, symbol, "1Day")
                     signals["crypto"][symbol] = signal.to_dict()
@@ -338,7 +341,7 @@ class TradingOrchestrator:
         print(f"  Reviewing {len(positions)} position(s)...")
 
         def bars_getter(symbol, asset_type):
-            return self._get_bars(symbol, asset_type)
+            return self._get_bars(symbol, asset_type, lookback_days=300)
 
         results = self.position_reviewer.review_all(
             positions=positions,
@@ -464,13 +467,17 @@ class TradingOrchestrator:
         # Assess each candidate
         assessed = []
         for candidate in trade_candidates:
+            if not candidate.get("entry_price"):
+                print(f"  ⚠️  {candidate['symbol']}: missing entry price, skipping")
+                continue
+
             assessment = self.risk_manager.assess_trade(
                 symbol=candidate["symbol"],
                 side=candidate.get("side", "buy"),
                 entry_price=candidate["entry_price"],
                 stop_loss_price=candidate.get("stop_loss"),
                 take_profit_price=candidate.get("take_profit"),
-                signal_score=candidate.get("score", 0),
+                signal_score=candidate.get("composite_score", 0),
             )
 
             candidate["risk_assessment"] = assessment.to_dict()
@@ -508,7 +515,7 @@ class TradingOrchestrator:
         print("🧠 Decision Engine - Aggregating Signals")
         print("=" * 60)
 
-        min_buy = self.decision_cfg.get("min_score_to_buy", 0.65)
+        min_buy = self.decision_cfg.get("min_score_to_buy", 0.3)
         min_sell = self.decision_cfg.get("min_score_to_sell", min_buy)
         candidates = []
 
@@ -623,7 +630,7 @@ class TradingOrchestrator:
             print(f"     Symbol: {trade['symbol']}")
             print(f"     Side: {trade['side'].upper()}")
             print(f"     Qty: {trade['suggested_qty']}")
-            print(f"     Entry: ${trade['entry_price']:.2f}")
+            print(f"     Entry: ${trade['entry_price']:.2f}" if trade.get("entry_price") else "")
             print(f"     Stop Loss: ${trade['stop_loss']:.2f}" if trade.get("stop_loss") else "")
             print(f"     Take Profit: ${trade['take_profit']:.2f}" if trade.get("take_profit") else "")
             print(f"     Score: {trade['composite_score']:.3f}")
@@ -655,8 +662,18 @@ class TradingOrchestrator:
                 # Log trade
                 self._log_trade(trade, result)
 
+                # Telegram notification
+                self.notifier.alert_order_executed(
+                    symbol=trade["symbol"],
+                    side=trade["side"],
+                    qty=trade["suggested_qty"],
+                    price=trade.get("entry_price"),
+                    order_id=result["id"],
+                )
+
             except Exception as e:
                 print(f"  ❌ Order failed: {e}")
+                self.notifier.alert_order_rejected(trade["symbol"], str(e))
 
     # ══════════════════════════════════════════════
     # Full Pipeline

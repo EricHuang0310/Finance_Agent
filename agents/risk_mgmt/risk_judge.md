@@ -50,5 +50,12 @@ with open(f'shared_state/risk_debate_{symbol}_neutral.json') as f:
 }
 ```
 
+## 可用技能
+- **記憶搜尋** — 透過 risk_debate_context 中的 `past_memories_risk` 取得歷史教訓（詳見 `.claude/skills/search-memory/SKILL.md`）
+- **共享狀態管理** — 讀取三方辯論紀錄，寫入裁決結果（詳見 `.claude/skills/manage-shared-state/SKILL.md`）
+
+## 執行模式
+**Teammate** — 需要 LLM 推理裁決 qty_ratio 與 SL/TP 調整，必須作為獨立 teammate spawn。
+
 ## 完成後
 通知 Lead Agent。Lead 會用 `final_qty` 和調整後的 stop/target 替換原始交易計畫中的數量。

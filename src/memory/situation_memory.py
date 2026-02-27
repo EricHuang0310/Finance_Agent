@@ -15,9 +15,10 @@ from rank_bm25 import BM25Okapi
 class SituationMemory:
     """Memory bank that stores situation-lesson pairs and retrieves by BM25 similarity."""
 
-    def __init__(self, name: str, storage_dir: str = "memory_store"):
+    def __init__(self, name: str, storage_dir: str = "memory_store", max_entries: int = 500):
         self.name = name
         self.storage_dir = Path(storage_dir)
+        self.max_entries = max_entries
         self.documents: list[str] = []
         self.lessons: list[str] = []
         self.bm25: Optional[BM25Okapi] = None
@@ -38,12 +39,20 @@ class SituationMemory:
         else:
             self.bm25 = None
 
+    def _prune(self):
+        """Drop oldest entries if over max_entries limit."""
+        if len(self.documents) > self.max_entries:
+            excess = len(self.documents) - self.max_entries
+            self.documents = self.documents[excess:]
+            self.lessons = self.lessons[excess:]
+
     # ── Add / Search ──────────────────────────────
 
     def add(self, situation: str, lesson: str):
         """Store a situation-lesson pair and rebuild the index."""
         self.documents.append(situation)
         self.lessons.append(lesson)
+        self._prune()
         self._rebuild_index()
         self.save()
 
@@ -52,6 +61,7 @@ class SituationMemory:
         for situation, lesson in pairs:
             self.documents.append(situation)
             self.lessons.append(lesson)
+        self._prune()
         self._rebuild_index()
         self.save()
 

@@ -12,11 +12,16 @@
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_sentiment_analyst
-
+from src.agents_launcher import task_sentiment_analyst
 result = task_sentiment_analyst()
 # result 寫入 shared_state/sentiment_signals.json
 ```
+
+## 輸入參數
+無需額外輸入。函數內部讀取 watchlist 並透過 `SentimentAnalyzer` 分析。
+
+使用 VADER NLP 對新聞進行情緒分析，套用時間衰減加權（近期新聞權重較高）。
+信心度基於新聞數量：0 篇 → 0.2，10+ 篇 → 1.0。
 
 ## 評分邏輯
 - 正面新聞（營收超預期、新產品發布、分析師上調評級）→ 加分（確認上升趨勢）
@@ -24,21 +29,23 @@ result = task_sentiment_analyst()
 - 無明確新聞 → 預設為 neutral (0.0)
 - Fear & Greed Index: 0=極度恐懼, 50=中性, 100=極度貪婪
 
-## 輸出格式
+## 輸出
+`shared_state/sentiment_signals.json`：
 ```json
 {
   "timestamp": "...",
   "market_sentiment": "bullish | bearish | neutral",
-  "fear_greed_index": 50,
+  "fear_greed_index": 55,
   "symbols": {
-    "AAPL": {"score": 0.3, "news_count": 5, "sentiment": "slightly_bullish"},
-    "BTC/USD": {"score": -0.2, "news_count": 2, "sentiment": "slightly_bearish"}
+    "AAPL": {
+      "score": 0.3,
+      "confidence": 0.7,
+      "news_count": 5,
+      "sentiment": "slightly_bullish"
+    }
   }
 }
 ```
-
-## 輸出
-`shared_state/sentiment_signals.json`
 
 ## 完成後
 - 將結果寫入 `shared_state/sentiment_signals.json`
@@ -46,7 +53,7 @@ result = task_sentiment_analyst()
 - 如有重大事件（如 earnings surprise > 10%），主動標記為高影響事件——這類事件可能加速現有趨勢或觸發趨勢反轉
 
 ## 目前狀態
-⚠️ 此模組目前為 placeholder，預設回傳 neutral。未來將整合：
+此模組目前為 placeholder，預設回傳 neutral。未來將整合：
 - Finnhub News API
 - NewsAPI
 - CNN Fear & Greed Index

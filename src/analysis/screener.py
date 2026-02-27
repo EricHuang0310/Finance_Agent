@@ -22,8 +22,9 @@ import pandas as pd
 class SymbolScreener:
     """Scans the market to find interesting symbols for the trading pipeline."""
 
-    def __init__(self, alpaca_client, config: dict):
+    def __init__(self, alpaca_client, config: dict, bars_getter=None):
         self.client = alpaca_client
+        self._bars_getter = bars_getter
         self.screener_cfg = config.get("screener", {})
 
         # Defaults
@@ -67,6 +68,14 @@ class SymbolScreener:
             "LINK/USD", "DOT/USD", "MATIC/USD", "ADA/USD", "XRP/USD",
         ])
 
+    def _get_bars(self, symbol: str, asset_type: str) -> Optional[pd.DataFrame]:
+        """Fetch bars via injected getter (cache-aware) or direct client call."""
+        if self._bars_getter:
+            return self._bars_getter(symbol, asset_type, lookback_days=self.lookback_days)
+        if asset_type == "crypto":
+            return self.client.get_crypto_bars(symbol, "1Day", lookback_days=self.lookback_days)
+        return self.client.get_stock_bars(symbol, "1Day", lookback_days=self.lookback_days)
+
     def screen_stocks(self) -> list[dict]:
         """
         Screen the stock universe and return top candidates ranked by a
@@ -77,9 +86,7 @@ class SymbolScreener:
 
         for symbol in self._stock_universe:
             try:
-                bars = self.client.get_stock_bars(
-                    symbol, "1Day", lookback_days=self.lookback_days
-                )
+                bars = self._get_bars(symbol, "stock")
                 if bars is None or len(bars) < 10:
                     continue
 
@@ -115,9 +122,7 @@ class SymbolScreener:
 
         for symbol in self._crypto_universe:
             try:
-                bars = self.client.get_crypto_bars(
-                    symbol, "1Day", lookback_days=self.lookback_days
-                )
+                bars = self._get_bars(symbol, "crypto")
                 if bars is None or len(bars) < 10:
                     continue
 

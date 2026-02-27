@@ -14,11 +14,13 @@
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_technical_analyst
-
+from src.agents_launcher import task_technical_analyst
 result = task_technical_analyst()
 # result 寫入 shared_state/technical_signals.json
 ```
+
+## 輸入參數
+無需額外輸入。函數內部使用 bar cache 取得 K 線，透過 `TechnicalAnalyzer` 計算。
 
 ## 評分邏輯（動量/趨勢策略）
 
@@ -61,7 +63,8 @@ result = task_technical_analyst()
   take_profit_price = latest_close - 3 × ATR  (進場價下方)
 ```
 
-## 輸出格式
+## 輸出
+`shared_state/technical_signals.json`：
 ```json
 {
   "timestamp": "...",
@@ -105,9 +108,6 @@ result = task_technical_analyst()
   }
 }
 ```
-
-## 輸出
-`shared_state/technical_signals.json`
 
 ## 完成後
 - 通知 Lead Agent 完成

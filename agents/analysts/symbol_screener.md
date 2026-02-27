@@ -28,11 +28,22 @@ result = task_symbol_screener()
 # result 寫入 shared_state/dynamic_watchlist.json
 ```
 
-## 輸出格式
+## 輸入參數
+無需額外輸入。函數內部使用 `SymbolScreener` 從內建候選池篩選。
+
+篩選參數（來自 `config/settings.yaml`）：
+- `max_stocks`: 最大股票數（預設 20）
+- `max_crypto`: 最大加密貨幣數（預設 5）
+- `min_price` / `max_price`: 價格範圍
+- `min_avg_volume`: 最低平均成交量
+- `lookback_days`: 回看天數
+
+## 輸出
+`shared_state/dynamic_watchlist.json`：
 ```json
 {
-  "stocks": ["NVDA", "TSLA", "AMD", ...],
-  "crypto": ["BTC/USD", "ETH/USD", ...],
+  "stocks": ["NVDA", "TSLA", "AMD"],
+  "crypto": ["BTC/USD", "ETH/USD"],
   "details": {
     "NVDA": {
       "latest_close": 135.5,

@@ -13,11 +13,18 @@
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_position_review
-
+from src.agents_launcher import task_position_review
 exit_candidates = task_position_review()
 # exit_candidates 為需要平倉的清單，寫入 shared_state/exit_review.json
+
+# 如有需要平倉的持倉：
+if exit_candidates:
+    from src.agents_launcher import task_execute_exits
+    task_execute_exits(exit_candidates)
 ```
+
+## 輸入參數
+無需額外輸入。函數內部從 `shared_state/` 讀取 technical_signals 和 market_overview。
 
 ## Pipeline 位置
 此 Agent 在 **Phase 1.5** 執行，位於資料收集（Phase 1）之後、決策引擎（Phase 2）之前：
@@ -86,7 +93,8 @@ exit_score <  exit_threshold (0.5) → exit_action = "hold"（繼續持有）
 持倉中的加密貨幣符號格式為 `BTCUSD`，但數據 API 使用 `BTC/USD` 格式。
 Agent 會自動偵測並轉換（例：BTCUSD → BTC/USD）。
 
-## 輸出格式
+## 輸出
+`shared_state/exit_review.json`：
 ```json
 {
   "timestamp": "...",
@@ -128,9 +136,6 @@ Agent 會自動偵測並轉換（例：BTCUSD → BTC/USD）。
   ]
 }
 ```
-
-## 輸出
-`shared_state/exit_review.json`
 
 ## 平倉執行
 - 被標記為 `exit_action: "close"` 的持倉，將在 Phase 4 由 Executor 透過市價單平倉

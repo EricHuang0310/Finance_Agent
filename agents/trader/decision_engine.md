@@ -93,6 +93,12 @@ candidates = task_generate_decisions(tech, sent, market_data=market_data)
 ## 輸出
 `shared_state/decisions.json`
 
+## 可用技能
+- **共享狀態管理** — 讀取所有 Phase 1 結果，寫入 `shared_state/decisions.json`（詳見 `.claude/skills/manage-shared-state/SKILL.md`）
+
+## 執行模式
+**Lead 直接執行** — 純 Python 分數聚合，由 Lead agent 直接呼叫 `task_generate_decisions()`，不需要 spawn。
+
 ## 完成後
 - 將候選清單（含做多與做空）傳給 Risk Manager agent
 - 如無任何候選符合門檻，直接通知 Reporter agent 發送「無趨勢交易機會」報告

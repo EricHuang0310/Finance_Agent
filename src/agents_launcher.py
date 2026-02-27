@@ -216,8 +216,9 @@ def task_execute_trades(assessed: list[dict]) -> list[dict]:
     for trade in approved:
         try:
             side_emoji = "🟢 BUY" if trade["side"] == "buy" else "🔴 SELL"
+            entry_str = f"@ ~${trade['entry_price']:.2f}" if trade.get("entry_price") else ""
             print(f"  📋 Placing order: {side_emoji} {trade['symbol']} "
-                  f"x{trade['suggested_qty']} @ ~${trade['entry_price']:.2f}")
+                  f"x{trade['suggested_qty']} {entry_str}")
 
             if trade.get("stop_loss") and trade.get("take_profit"):
                 result = orch.client.place_bracket_order(
@@ -302,8 +303,20 @@ def task_send_report():
             with open(risk_path) as f:
                 risk_data = json.load(f)
 
-            approved = [a for a in risk_data.get("assessments", []) if a.get("approved")]
-            rejected = [a for a in risk_data.get("assessments", []) if not a.get("approved")]
+            # Merge risk assessments onto candidates so report has both
+            # composite_score (from candidate) and suggested_qty/reason (from risk)
+            risk_by_symbol = {a["symbol"]: a for a in risk_data.get("assessments", [])}
+            approved = []
+            rejected = []
+            for c in candidates:
+                risk_info = risk_by_symbol.get(c["symbol"])
+                if risk_info:
+                    merged = {**c, **risk_info}
+                    if risk_info.get("approved"):
+                        approved.append(merged)
+                    else:
+                        merged["risk_assessment"] = {"reason": risk_info.get("reason", "N/A")}
+                        rejected.append(merged)
             notifier.report_pipeline_summary(candidates, approved, rejected)
 
     print("📨 [Reporter] ✅ Telegram report sent")
@@ -502,220 +515,134 @@ AGENT_TEAMS_PROMPT = """
 啟動一個 trading-analysis agent team 來分析市場並生成交易建議。
 此 pipeline 包含投資辯論和風控辯論環節，模擬真實投資團隊的決策流程。
 
+## 架構說明
+- **Subagent** = 讀取對應 agent spec（`agents/` 下的 .md），整份內容作為 Task tool prompt spawn 執行
+- **Teammate** = 需要 LLM 推理，作為獨立 teammate spawn
+- **Lead 直接執行** = 極簡操作，Lead 直接呼叫 Python 函數
+- Agent spec 是自包含的，包含執行方式、輸入參數、輸出格式，可直接作為 Task tool prompt
+
 ---
 
 ## Phase 0 (Symbol Discovery, 如果 watchlist_mode == "dynamic")
-先執行 Symbol Screener 來自動篩選標的：
-
-0. **symbol-screener** - 讀取 agents/symbol_screener.md 的指令，
-   然後執行:
-   ```python
-   from src.agents_launcher import task_symbol_screener
-   result = task_symbol_screener()
-   # result 寫入 shared_state/dynamic_watchlist.json
-   ```
+**[Subagent]** 讀取 `agents/analysts/symbol_screener.md` 完整內容，用 Task tool spawn 執行。
 
 ---
 
-## Phase 1 (Parallel Analysts, 等 Phase 0 完成)
-同時 spawn 以下 3 個 agents：
-
-1. **market-analyst** - 讀取 agents/market_analyst.md，執行:
-   ```python
-   from src.agents_launcher import task_market_analyst
-   task_market_analyst()
-   # 包含 Market Regime Detection (SPY EMA alignment)
-   # 結果寫入 shared_state/market_overview.json（含 market_regime 欄位）
-   ```
-
-2. **tech-analyst** - 讀取 agents/technical_analyst.md，執行:
-   ```python
-   from src.agents_launcher import task_technical_analyst
-   task_technical_analyst()
-   # 結果含 confidence 信心度 (0.0-1.0)
-   ```
-
-3. **sentiment-analyst** - 執行:
-   ```python
-   from src.agents_launcher import task_sentiment_analyst
-   task_sentiment_analyst()
-   # 結果含 confidence 信心度 (基於新聞數量)
-   ```
+## Phase 1 (Parallel Data Collection, 等 Phase 0 完成)
+**[3 個並行 Subagent]** 用 Task tool 同時 spawn 以下 3 個 subagents：
+1. **market-data** → 讀取 `agents/analysts/market_analyst.md` 完整內容作為 prompt
+2. **tech-signals** → 讀取 `agents/analysts/technical_analyst.md` 完整內容作為 prompt
+3. **sentiment** → 讀取 `agents/analysts/sentiment_analyst.md` 完整內容作為 prompt
 
 ---
 
 ## Phase 1.5 (Position Exit Review, 等 Phase 1 全部完成)
-
-4. **position-reviewer** - 讀取 agents/position_reviewer.md，執行:
-   ```python
-   from src.agents_launcher import task_position_review
-   exit_candidates = task_position_review()
-   # 如有需要平倉的持倉：
-   if exit_candidates:
-       from src.agents_launcher import task_execute_exits
-       task_execute_exits(exit_candidates)
-   ```
+**[Subagent]** 讀取 `agents/trader/position_reviewer.md` 完整內容，用 Task tool spawn 執行。
 
 ---
 
 ## Phase 2 (Decision Engine, 等 Phase 1.5 完成)
-
-5. 我 (Lead) 執行 Decision Engine（含 confidence 加權 + regime 動態權重）：
-   ```python
-   from src.agents_launcher import task_generate_decisions
-   import json
-   with open('shared_state/technical_signals.json') as f:
-       tech = json.load(f)
-   with open('shared_state/sentiment_signals.json') as f:
-       sent = json.load(f)
-   with open('shared_state/market_overview.json') as f:
-       market = json.load(f)
-   candidates = task_generate_decisions(tech, sent, market)
-   ```
+**[Lead 直接執行]** Decision Engine — 純 Python 分數聚合：
+```python
+from src.agents_launcher import task_generate_decisions
+import json
+with open('shared_state/technical_signals.json') as f:
+    tech = json.load(f)
+with open('shared_state/sentiment_signals.json') as f:
+    sent = json.load(f)
+with open('shared_state/market_overview.json') as f:
+    market = json.load(f)
+candidates = task_generate_decisions(tech, sent, market)
+```
 
 ---
 
 ## Phase 2.5 (Fundamentals + Investment Debate, 取 Top-N 候選)
 
-6. 我 (Lead) 為 Top-N 候選取得基本面資料：
-   ```python
-   from src.agents_launcher import task_fundamentals_analyst, task_prepare_debate
-   import yaml
-   with open('config/settings.yaml') as f:
-       cfg = yaml.safe_load(f)
-   top_n = cfg.get('debate', {}).get('top_n', 3)
-   top_symbols = [c['symbol'] for c in candidates[:top_n]]
-   task_fundamentals_analyst(top_symbols)
-   ```
+**[Subagent]** 取得基本面資料：讀取 `agents/analysts/fundamentals_analyst.md`，附加輸入參數 `symbols = Top-N 候選標的列表`。
 
-7. 我 (Lead) 為每個 Top-N 候選準備辯論上下文：
-   ```python
-   for symbol in top_symbols:
-       task_prepare_debate(symbol)
-   ```
+**[Lead]** 準備辯論上下文：
+```python
+from src.agents_launcher import task_prepare_debate
+for symbol in top_symbols:
+    task_prepare_debate(symbol)
+```
 
 ### 投資辯論（對每個 Top-N 候選，可並行）
+**[Teammates]** 對每個候選 symbol，依序 spawn 以下 teammates：
 
-對每個候選 symbol，依序 spawn 以下 teammates：
+- **bull-researcher-{symbol}** → 讀取 `agents/researchers/bull_researcher.md` + `shared_state/debate_context_{symbol}.json`
+- **bear-researcher-{symbol}** (等 bull 完成) → 讀取 `agents/researchers/bear_researcher.md` + bull 論點
+- **research-judge-{symbol}** (等 bear 完成) → 讀取 `agents/researchers/research_judge.md` + 完整辯論紀錄
+  → 裁決 BUY/SELL/HOLD + score_adjustment (-0.5 ~ +0.5)
 
-8a. **bull-researcher-{symbol}** - 讀取 agents/bull_researcher.md
-    → 讀取 shared_state/debate_context_{symbol}.json
-    → 用 Claude 推理寫出看多論點
-    → 寫入 shared_state/debate_{symbol}_bull_r1.json
-
-8b. **bear-researcher-{symbol}** (等 bull 完成)
-    → 讀取 agents/bear_researcher.md + bull 論點
-    → 用 Claude 推理寫出看空論點 + 反駁
-    → 寫入 shared_state/debate_{symbol}_bear_r1.json
-
-8c. **research-judge-{symbol}** (等 bear 完成)
-    → 讀取 agents/research_judge.md + 完整辯論紀錄
-    → 裁決 BUY/SELL/HOLD + score_adjustment (-0.5 ~ +0.5)
-    → 寫入 shared_state/debate_{symbol}_result.json
-
-9. 我 (Lead) 合併辯論結果：
-   ```python
-   from src.agents_launcher import task_merge_debates
-   candidates = task_merge_debates(candidates)
-   ```
+**[Lead]** 合併辯論結果：
+```python
+from src.agents_launcher import task_merge_debates
+candidates = task_merge_debates(candidates)
+```
 
 ---
 
 ## Phase 3 (Risk Manager 硬性規則, 等 Phase 2.5 完成)
-
-10. **risk-manager** - 讀取 agents/risk_manager.md，對候選執行硬性風控驗證:
-    ```python
-    from src.agents_launcher import task_risk_manager
-    assessed = task_risk_manager(candidates)
-    approved = [t for t in assessed if t.get('approved')]
-    ```
+**[Subagent]** 讀取 `agents/risk_mgmt/risk_manager.md`，附加輸入參數 `candidates = Decision Engine 的候選列表` 到 prompt 末尾，用 Task tool spawn 執行。
 
 ---
 
 ## Phase 3.5 (Risk Debate, 對每筆通過硬規則的交易)
 
-11. 我 (Lead) 為每筆 approved 交易準備風控辯論上下文：
-    ```python
-    from src.agents_launcher import task_prepare_risk_debate
-    for trade in approved:
-        task_prepare_risk_debate(trade)
-    ```
+**[Lead]** 準備風控辯論上下文：
+```python
+from src.agents_launcher import task_prepare_risk_debate
+for trade in approved:
+    task_prepare_risk_debate(trade)
+```
 
 ### 風控辯論（對每筆 approved 交易，可並行）
+**[Teammates]** 依序 spawn：
+- **aggressive-analyst-{symbol}** → 讀取 `agents/risk_mgmt/aggressive_analyst.md`
+- **conservative-analyst-{symbol}** (等 aggressive 完成) → 讀取 `agents/risk_mgmt/conservative_analyst.md`
+- **neutral-analyst-{symbol}** (等 conservative 完成) → 讀取 `agents/risk_mgmt/neutral_analyst.md`
+- **risk-judge-{symbol}** (等 neutral 完成) → 讀取 `agents/risk_mgmt/risk_judge.md`
+  → 裁決 qty_ratio (0.5~1.0) + 調整 stop_loss / take_profit
 
-12a. **aggressive-analyst-{symbol}** - 讀取 agents/aggressive_analyst.md
-     → 讀取 shared_state/risk_debate_context_{symbol}.json
-     → 主張接受較高風險，強調機會成本
-     → 寫入 shared_state/risk_debate_{symbol}_aggressive.json
-
-12b. **conservative-analyst-{symbol}** (等 aggressive 完成)
-     → 讀取 agents/conservative_analyst.md + aggressive 論點
-     → 主張縮減曝險，強調下行風險
-     → 寫入 shared_state/risk_debate_{symbol}_conservative.json
-
-12c. **neutral-analyst-{symbol}** (等 conservative 完成)
-     → 讀取 agents/neutral_analyst.md + aggressive + conservative 論點
-     → 提出平衡觀點
-     → 寫入 shared_state/risk_debate_{symbol}_neutral.json
-
-12d. **risk-judge-{symbol}** (等 neutral 完成)
-     → 讀取 agents/risk_judge.md + 三方辯論紀錄
-     → 裁決最終 qty_ratio (0.5~1.0) + 調整 stop_loss / take_profit
-     → 寫入 shared_state/risk_debate_{symbol}_result.json
-
-13. 我 (Lead) 合併風控辯論結果：
-    ```python
-    from src.agents_launcher import task_merge_risk_debates
-    approved = task_merge_risk_debates(approved)
-    ```
+**[Lead]** 合併風控辯論結果：
+```python
+from src.agents_launcher import task_merge_risk_debates
+approved = task_merge_risk_debates(approved)
+```
 
 ---
 
 ## Phase 4 (Execution, 等 Phase 3.5 完成)
-
-14. **executor** - 讀取 agents/executor.md，下單:
-    ```python
-    from src.agents_launcher import task_execute_trades
-    executed = task_execute_trades(approved)
-    ```
+**[Subagent]** 讀取 `agents/trader/executor.md`，附加輸入參數 `assessed = 風控評估後的交易列表` 到 prompt 末尾，用 Task tool spawn 執行。
 
 ---
 
 ## Phase 5 (Report)
-
-15. 發送 Telegram 通知（含辯論摘要）:
-    ```python
-    from src.agents_launcher import task_send_report
-    task_send_report()
-    ```
+**[Subagent]** 讀取 `agents/reporting/reporter.md` 完整內容，用 Task tool spawn 執行。
 
 ---
 
 ## Phase 6 (Reflection & Memory Update)
 
-16. 我 (Lead) 檢查是否有已平倉但尚未反思的交易：
-    ```python
-    from src.agents_launcher import task_check_reflections, task_prepare_reflection, task_save_reflection_results
-    unreflected = task_check_reflections()
-    ```
+**[Lead]** 檢查未反思的交易：
+```python
+from src.agents_launcher import task_check_reflections, task_prepare_reflection, task_save_reflection_results
+unreflected = task_check_reflections()
+for trade_record in unreflected:
+    task_prepare_reflection(trade_record)
+```
 
-17. 對每筆需反思的交易 spawn **reflection-analyst**：
-    ```python
-    for trade_record in unreflected:
-        task_prepare_reflection(trade_record)
-    ```
+**[Teammates]** 對每筆需反思的交易 spawn：
+- **reflection-analyst-{trade_id}** → 讀取 `agents/reflection/reflection_analyst.md` + `shared_state/reflection_context_{trade_id}.json`
 
-    17a. **reflection-analyst-{trade_id}** - 讀取 agents/reflection_analyst.md
-         → 讀取 shared_state/reflection_context_{trade_id}.json
-         → 分析決策正確性、萃取教訓
-         → 寫入 shared_state/reflection_{trade_id}_result.json
-
-18. 我 (Lead) 儲存反思結果到記憶庫：
-    ```python
-    for trade_record in unreflected:
-        trade_id = trade_record.get('order_id', 'unknown')
-        task_save_reflection_results(trade_id)
-    ```
+**[Lead]** 儲存反思結果到記憶庫：
+```python
+for trade_record in unreflected:
+    trade_id = trade_record.get('order_id', 'unknown')
+    task_save_reflection_results(trade_id)
+```
 
 ---
 

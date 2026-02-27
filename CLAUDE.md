@@ -35,21 +35,85 @@ Supports two modes:
 - **Agent Teams mode**: Full pipeline with investment debate, risk debate, and reflection (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
 - **Standalone mode**: Pure rule-based pipeline; debate/reflection phases are skipped, but confidence weighting and market regime detection still apply
 
+### Agent Directory Structure
+
+```
+agents/
+├── analysts/          # Phase 0-1 data collection
+│   ├── market_analyst.md
+│   ├── technical_analyst.md
+│   ├── sentiment_analyst.md
+│   ├── fundamentals_analyst.md
+│   └── symbol_screener.md
+├── researchers/       # Phase 2.5 investment debate (Agent Teams only)
+│   ├── bull_researcher.md
+│   ├── bear_researcher.md
+│   └── research_judge.md
+├── risk_mgmt/         # Phase 3-3.5 risk assessment & debate
+│   ├── risk_manager.md
+│   ├── aggressive_analyst.md
+│   ├── conservative_analyst.md
+│   ├── neutral_analyst.md
+│   └── risk_judge.md
+├── trader/            # Phase 1.5, 2, 4 position management & execution
+│   ├── decision_engine.md
+│   ├── position_reviewer.md
+│   └── executor.md
+├── reporting/         # Phase 5 notifications
+│   └── reporter.md
+└── reflection/        # Phase 6 post-trade learning
+    └── reflection_analyst.md
+```
+
+### Source Code Structure
+
+```
+src/
+├── orchestrator.py              # Main pipeline, TradingOrchestrator class
+│                                #   - Decision engine (generate_trade_plan)
+│                                #   - Trade executor (execute_trades, execute_exits)
+│                                #   - Market regime detection
+│                                #   - Bar cache (_get_bars)
+├── agents_launcher.py           # Agent Teams prompt + task_*() functions
+├── alpaca_client.py             # Alpaca API wrapper (data + orders)
+├── analysis/
+│   ├── technical.py             # TechnicalAnalyzer — RSI, MACD, BB, EMA, ATR
+│   ├── sentiment.py             # SentimentAnalyzer — VADER NLP + news
+│   ├── screener.py              # SymbolScreener — dynamic watchlist
+│   ├── position_reviewer.py     # PositionReviewer — 4-factor exit scoring
+│   └── fundamentals.py          # FundamentalsAnalyzer — yfinance data
+├── risk/
+│   └── manager.py               # RiskManager — hard rules, position sizing, drawdown
+├── notifications/
+│   └── telegram.py              # TelegramNotifier — all Telegram messages
+├── memory/
+│   ├── situation_memory.py      # SituationMemory — BM25 memory banks
+│   └── reflection.py            # Reflection helpers — lesson extraction
+└── debate/
+    └── helpers.py               # Debate context preparation + merge functions
+```
+
 ### Pipeline (sequential phases)
 
 ```
-Phase 0:   Symbol Screener                               (dynamic watchlist mode only)
-Phase 1:   Market + Technical + Sentiment Analysts        (parallelizable, with confidence tracking)
-Phase 1.5: Position Exit Reviewer                         (evaluates existing positions for close)
-Phase 1.8: Market Regime Detection                        (SPY EMA alignment → risk_on/risk_off/neutral)
-Phase 2:   Decision Engine                                (confidence-weighted + regime-adjusted scoring)
-Phase 2.5: Fundamentals Fetch + Investment Debate         (Top-N only; Agent Teams mode)
-Phase 3:   Risk Manager                                   (hard rules: veto power, kill switch)
-Phase 3.5: Risk Debate                                    (Aggressive/Conservative/Neutral/Judge; Agent Teams mode)
-Phase 4:   Executor                                       (exits first, then new entries)
-Phase 5:   Reporter                                       (Telegram notifications + debate summaries)
-Phase 6:   Reflection & Memory Update                     (post-trade learning; Agent Teams mode)
+Phase 0:   Symbol Screener           [Subagent]     (dynamic watchlist mode only)
+Phase 1:   Market/Tech/Sentiment     [Subagent ×3]  (parallelizable, confidence tracking)
+Phase 1.5: Position Exit Reviewer    [Subagent]     (evaluates existing positions for close)
+Phase 1.8: Market Regime Detection   [Lead]         (SPY EMA alignment → risk_on/risk_off/neutral)
+Phase 2:   Decision Engine           [Lead]         (confidence-weighted + regime-adjusted scoring)
+Phase 2.5: Investment Debate         [Teammate ×3]  (Bull/Bear/Judge; Top-N only; Agent Teams mode)
+Phase 3:   Risk Manager              [Subagent]     (hard rules: veto power, kill switch)
+Phase 3.5: Risk Debate               [Teammate ×4]  (Aggressive/Conservative/Neutral/Judge; Agent Teams mode)
+Phase 4:   Executor                  [Subagent]     (exits first, then new entries)
+Phase 5:   Reporter                  [Subagent]     (Telegram notifications + debate summaries)
+Phase 6:   Reflection                [Teammate]     (post-trade learning; Agent Teams mode)
 ```
+
+### Execution Modes
+
+- **Lead direct** — Lead agent calls `task_*()` Python functions directly. No spawn needed. (Decision Engine, Market Regime)
+- **Subagent** — Agent spec (`agents/*.md`) is self-contained: includes role, scoring logic, execution code, I/O schema. Read the spec, use it as Task tool prompt. (Analysts, Screener, Exit Review, Risk Manager, Executor, Reporter)
+- **Teammate** — Full independent agent with LLM reasoning. Required for debate/reflection where argumentation matters. (Bull/Bear/Research Judge, Risk Debate panel, Reflection Analyst)
 
 ### Inter-agent Communication
 
@@ -69,19 +133,19 @@ Memory files persist in `memory_store/<name>.json`. Reflection (Phase 6) writes 
 ### Investment Debate (Phase 2.5, Agent Teams only)
 
 Only Top-N candidates (default 3) by composite score enter debate:
-1. **Bull Researcher** (`agents/bull_researcher.md`) — bullish arguments
-2. **Bear Researcher** (`agents/bear_researcher.md`) — bearish arguments + rebuttal
-3. **Research Judge** (`agents/research_judge.md`) — verdict: BUY/SELL/HOLD + `score_adjustment` (-0.5 to +0.5)
+1. **Bull Researcher** (`agents/researchers/bull_researcher.md`) — bullish arguments
+2. **Bear Researcher** (`agents/researchers/bear_researcher.md`) — bearish arguments + rebuttal
+3. **Research Judge** (`agents/researchers/research_judge.md`) — verdict: BUY/SELL/HOLD + `score_adjustment` (-0.5 to +0.5)
 
 The `score_adjustment` is added to the composite score, not a replacement.
 
 ### Risk Debate (Phase 3.5, Agent Teams only)
 
 Only trades that pass hard risk rules enter debate:
-1. **Aggressive Analyst** (`agents/aggressive_analyst.md`) — argues for larger position
-2. **Conservative Analyst** (`agents/conservative_analyst.md`) — argues for smaller position
-3. **Neutral Analyst** (`agents/neutral_analyst.md`) — balanced view
-4. **Risk Judge** (`agents/risk_judge.md`) — verdict: `qty_ratio` (0.5-1.0), adjusted stop/target
+1. **Aggressive Analyst** (`agents/risk_mgmt/aggressive_analyst.md`) — argues for larger position
+2. **Conservative Analyst** (`agents/risk_mgmt/conservative_analyst.md`) — argues for smaller position
+3. **Neutral Analyst** (`agents/risk_mgmt/neutral_analyst.md`) — balanced view
+4. **Risk Judge** (`agents/risk_mgmt/risk_judge.md`) — verdict: `qty_ratio` (0.5-1.0), adjusted stop/target
 
 Hard rules (kill switch, exposure limits) are non-negotiable. Debate can only reduce position size.
 
@@ -109,4 +173,5 @@ Hard rules (kill switch, exposure limits) are non-negotiable. Debate can only re
 - `debate.top_n` — number of top candidates entering investment debate (default 3).
 - `debate.investment_rounds` / `debate.risk_rounds` — debate rounds per candidate.
 - `memory.storage_dir` — directory for BM25 memory JSON files (default `memory_store`).
-- Agent specs in `agents/*.md` are written in Chinese.
+- Agent specs in `agents/{analysts,researchers,risk_mgmt,trader,reporting,reflection}/*.md` are written in Chinese. Subagent specs are self-contained (include execution code, I/O schema) and can be used directly as Task tool prompts.
+- User-invocable skills in `.claude/skills/` (5 total): `run-full-pipeline`, `check-portfolio`, `run-market-analysis`, `run-position-review`, `search-memory`.

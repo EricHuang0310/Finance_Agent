@@ -12,11 +12,17 @@
 
 ## 執行方式
 ```python
-from src.agents_launcher import get_orchestrator, task_send_report
-
+from src.agents_launcher import task_send_report
 task_send_report()
 # 透過 Telegram Bot 發送報告
 ```
+
+## 輸入參數
+無需額外輸入。函數內部從 `shared_state/` 讀取最新的 decisions 和 risk_assessment，並從 Alpaca API 取得帳戶狀態。
+
+前置條件：
+- `config/.env` 中設定了 `TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_CHAT_ID`
+- 可用 `python -m src.agents_launcher --test-telegram` 測試連線
 
 ## 報告內容
 
@@ -37,6 +43,15 @@ task_send_report()
 - 建議進場價、止損價、目標價
 - RSI 值與趨勢方向
 - 風險報酬比
+
+## 通知類型
+| 類型 | 觸發時機 | 內容 |
+|------|---------|------|
+| 信號警報 | 每筆 approved trade | symbol, side, score, SL, TP, RSI, trend |
+| Pipeline 摘要 | pipeline 結束 | candidates / approved / rejected 數量 |
+| 帳戶狀態 | pipeline 結束 | equity, cash, exposure%, P&L |
+| 平倉通知 | 持倉被關閉 | symbol, ROI (金額 + 百分比), exit_reason |
+| 辯論摘要 | 辯論結束 | Bull/Bear 核心論點, Judge 裁決 |
 
 ## 輸出
 透過 Telegram Bot 發送訊息（不寫入 shared_state）

@@ -39,6 +39,8 @@ class RiskManager:
         self.positions = []
         self.daily_pnl = 0.0
         self.daily_pnl_pct = 0.0
+        self.peak_equity = 0.0
+        self.drawdown_from_peak_pct = 0.0
         self.kill_switch_active = False
 
     def update_portfolio(self, account: dict, positions: list[dict]):
@@ -51,8 +53,20 @@ class RiskManager:
         self.daily_pnl = self.equity - last_equity
         self.daily_pnl_pct = (self.daily_pnl / last_equity) if last_equity > 0 else 0
 
+        # Track peak equity for drawdown calculation
+        # In a one-shot system, use the higher of last_equity and current equity
+        self.peak_equity = max(last_equity, self.equity)
+        if self.peak_equity > 0:
+            self.drawdown_from_peak_pct = (self.peak_equity - self.equity) / self.peak_equity
+        else:
+            self.drawdown_from_peak_pct = 0.0
+
         # Check kill switch
         if self.daily_pnl_pct <= -self.kill_switch_pct:
+            self.kill_switch_active = True
+
+        # Check max drawdown
+        if self.drawdown_from_peak_pct >= self.max_drawdown_pct:
             self.kill_switch_active = True
 
     def assess_trade(
@@ -161,6 +175,8 @@ class RiskManager:
             "current_exposure_pct": round(exposure_pct, 2),
             "max_exposure_pct": self.max_exposure_pct * 100,
             "daily_pnl_pct": round(self.daily_pnl_pct * 100, 2),
+            "drawdown_from_peak_pct": round(self.drawdown_from_peak_pct * 100, 2),
+            "max_drawdown_pct": self.max_drawdown_pct * 100,
             "position_count": len(self.positions),
             "max_positions": self.max_positions,
             "kill_switch_active": self.kill_switch_active,

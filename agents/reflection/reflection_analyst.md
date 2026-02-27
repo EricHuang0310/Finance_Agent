@@ -68,5 +68,12 @@ with open(f'shared_state/reflection_context_{trade_id}.json') as f:
 }
 ```
 
+## 可用技能
+- **記憶搜尋** — 搜尋過去類似交易的教訓作為參考（詳見 `.claude/skills/search-memory/SKILL.md`）
+- **共享狀態管理** — 讀取 reflection_context，寫入反思結果（詳見 `.claude/skills/manage-shared-state/SKILL.md`）
+
+## 執行模式
+**Teammate** — 需要 LLM 推理分析決策品質並萃取教訓，必須作為獨立 teammate spawn。
+
 ## 完成後
 通知 Lead Agent。Lead 會呼叫 `task_save_reflections()` 將教訓存入各角色的記憶庫。

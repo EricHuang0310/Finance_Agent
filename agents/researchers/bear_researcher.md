@@ -53,5 +53,12 @@ with open(f'shared_state/debate_{symbol}_bull_r1.json') as f:
 }
 ```
 
+## 可用技能
+- **記憶搜尋** — 透過 debate_context 中的 `past_memories_bear` 取得歷史教訓（詳見 `.claude/skills/search-memory/SKILL.md`）
+- **共享狀態管理** — 讀取 debate_context + Bull 論點，寫入辯論論點（詳見 `.claude/skills/manage-shared-state/SKILL.md`）
+
+## 執行模式
+**Teammate** — 需要 LLM 推理產出看空論點與反駁，必須作為獨立 teammate spawn。
+
 ## 完成後
 通知 Lead Agent，等待 Research Judge 裁決（或下一輪 Bull 回應）。
