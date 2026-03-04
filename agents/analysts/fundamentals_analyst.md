@@ -23,7 +23,6 @@ result = task_fundamentals_analyst(symbols)
 - 取得指標：P/E, Forward P/E, P/B, D/E, Revenue Growth, Free Cash Flow, Market Cap, Sector
 
 ## 注意事項
-- 加密貨幣標的會自動跳過（無基本面資料）
 - 此模組不產生評分，只提供原始數據和人類可讀摘要
 - 基本面資料**不參與** composite score 計算
 

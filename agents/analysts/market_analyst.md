@@ -55,9 +55,6 @@ result = task_market_analyst()
       "market_score": 0.35
     }
   },
-  "crypto": {
-    "BTC/USD": {"latest_close": 65000, "market_score": 0.42}
-  }
 }
 ```
 

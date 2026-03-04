@@ -32,9 +32,11 @@
 
 ## 執行方式
 ```python
-import json
+import json, os
+from pathlib import Path
+STATE_DIR = Path(os.environ.get("SHARED_STATE_DIR", "shared_state"))
 
-with open(f'shared_state/reflection_context_{trade_id}.json') as f:
+with open(STATE_DIR / f'reflection_context_{trade_id}.json') as f:
     context = json.load(f)
 
 # context 包含:
@@ -46,7 +48,7 @@ with open(f'shared_state/reflection_context_{trade_id}.json') as f:
 ```
 
 ## 輸出格式
-寫入 `shared_state/reflection_{trade_id}_result.json`：
+寫入 `STATE_DIR/reflection_{trade_id}_result.json`（STATE_DIR = 環境變數 `SHARED_STATE_DIR`，通常為 `shared_state/YYYY-MM-DD/`）：
 ```json
 {
   "trade_id": "...",

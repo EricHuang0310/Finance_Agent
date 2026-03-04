@@ -8,9 +8,6 @@ Screens stocks by:
 - Volatility
 - Liquidity filters (min price, min volume)
 
-Screens crypto by:
-- Volume leaders
-- Price momentum
 """
 
 from datetime import datetime, timedelta
@@ -29,7 +26,6 @@ class SymbolScreener:
 
         # Defaults
         self.max_stocks = self.screener_cfg.get("max_stocks", 20)
-        self.max_crypto = self.screener_cfg.get("max_crypto", 5)
         self.min_price = self.screener_cfg.get("min_price", 5.0)
         self.max_price = self.screener_cfg.get("max_price", 1000.0)
         self.min_avg_volume = self.screener_cfg.get("min_avg_volume", 500_000)
@@ -55,7 +51,7 @@ class SymbolScreener:
             "CAT", "DE", "UNP", "HON", "RTX", "LMT", "GE", "BA",
             # Communication
             "NFLX", "DIS", "CMCSA", "VZ", "T",
-            # Crypto-adjacent / High-vol
+            # High-vol
             "COIN", "MSTR", "PLTR", "SOFI", "HOOD", "RBLX", "SNAP", "SQ",
             # Semis
             "TSM", "ASML", "ARM", "SMCI",
@@ -63,17 +59,11 @@ class SymbolScreener:
             "SPY", "QQQ", "IWM", "XLF", "XLE", "XLK",
         ])
 
-        self._crypto_universe = self.screener_cfg.get("crypto_universe", [
-            "BTC/USD", "ETH/USD", "SOL/USD", "DOGE/USD", "AVAX/USD",
-            "LINK/USD", "DOT/USD", "MATIC/USD", "ADA/USD", "XRP/USD",
-        ])
 
     def _get_bars(self, symbol: str, asset_type: str) -> Optional[pd.DataFrame]:
         """Fetch bars via injected getter (cache-aware) or direct client call."""
         if self._bars_getter:
             return self._bars_getter(symbol, asset_type, lookback_days=self.lookback_days)
-        if asset_type == "crypto":
-            return self.client.get_crypto_bars(symbol, "1Day", lookback_days=self.lookback_days)
         return self.client.get_stock_bars(symbol, "1Day", lookback_days=self.lookback_days)
 
     def screen_stocks(self) -> list[dict]:
@@ -115,32 +105,6 @@ class SymbolScreener:
         print(f"  Selected {len(top)} stocks from {len(results)} that passed filters")
         return top
 
-    def screen_crypto(self) -> list[dict]:
-        """Screen crypto universe and return top candidates."""
-        print(f"\n  Screening {len(self._crypto_universe)} crypto pairs...")
-        results = []
-
-        for symbol in self._crypto_universe:
-            try:
-                bars = self._get_bars(symbol, "crypto")
-                if bars is None or len(bars) < 10:
-                    continue
-
-                info = self._compute_metrics(bars, symbol)
-                if info is None:
-                    continue
-
-                results.append(info)
-
-            except Exception:
-                pass
-
-        results.sort(key=lambda x: x["activity_score"], reverse=True)
-
-        top = results[: self.max_crypto]
-        print(f"  Selected {len(top)} crypto from {len(results)} candidates")
-        return top
-
     def screen_all(self) -> dict:
         """
         Run full screening and return a dynamic watchlist.
@@ -148,19 +112,16 @@ class SymbolScreener:
         Returns:
             {
                 "stocks": ["NVDA", "TSLA", ...],
-                "crypto": ["BTC/USD", "ETH/USD", ...],
                 "details": { "NVDA": {...}, ... },
                 "timestamp": "..."
             }
         """
         stock_results = self.screen_stocks()
-        crypto_results = self.screen_crypto()
 
         stock_symbols = [r["symbol"] for r in stock_results]
-        crypto_symbols = [r["symbol"] for r in crypto_results]
 
         details = {}
-        for r in stock_results + crypto_results:
+        for r in stock_results:
             details[r["symbol"]] = {
                 "latest_close": r["latest_close"],
                 "momentum_pct": round(r["momentum_pct"], 2),
@@ -171,12 +132,10 @@ class SymbolScreener:
 
         return {
             "stocks": stock_symbols,
-            "crypto": crypto_symbols,
             "details": details,
             "timestamp": datetime.now().isoformat(),
             "screened_from": {
                 "stock_universe": len(self._stock_universe),
-                "crypto_universe": len(self._crypto_universe),
             },
         }
 

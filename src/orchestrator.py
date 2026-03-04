@@ -8,6 +8,7 @@ Usage:
 """
 
 import json
+import os
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from typing import Optional
 import yaml
 
 from src.alpaca_client import AlpacaClient
+from src.state_dir import get_state_dir, cleanup_old_state
 from src.analysis.technical import TechnicalAnalyzer
 from src.analysis.sentiment import SentimentAnalyzer
 from src.analysis.screener import SymbolScreener
@@ -54,9 +56,10 @@ class TradingOrchestrator:
         self.position_reviewer = PositionReviewer(self.config)
         self.notifier = TelegramNotifier()
 
-        # Shared state paths
-        self.state_dir = Path("shared_state")
-        self.state_dir.mkdir(exist_ok=True)
+        # Shared state paths (daily subfolder)
+        self.state_dir = get_state_dir()
+        os.environ["SHARED_STATE_DIR"] = str(self.state_dir)
+        cleanup_old_state(keep_days=7)
         self.log_dir = Path("logs")
         self.log_dir.mkdir(exist_ok=True)
 
@@ -79,7 +82,6 @@ class TradingOrchestrator:
         # Config shortcuts
         self.watchlist_mode = self.config.get("watchlist_mode", "static")
         self.watchlist_stocks = self.config.get("watchlist", {}).get("stocks", [])
-        self.watchlist_crypto = self.config.get("watchlist", {}).get("crypto", [])
         self.weights = self.config.get("scoring", {})
         self.decision_cfg = self.config.get("decision", {})
 
@@ -95,14 +97,12 @@ class TradingOrchestrator:
 
         result = self.screener.screen_all()
 
-        # Update the watchlists used by all downstream agents
+        # Update the watchlist used by all downstream agents
         self.watchlist_stocks = result["stocks"]
-        self.watchlist_crypto = result["crypto"]
 
         print(f"\n  📋 Dynamic watchlist:")
         print(f"     Stocks ({len(result['stocks'])}): {', '.join(result['stocks'][:10])}"
               + (f" ... +{len(result['stocks'])-10} more" if len(result['stocks']) > 10 else ""))
-        print(f"     Crypto ({len(result['crypto'])}): {', '.join(result['crypto'])}")
 
         # Print top 5 by activity score
         details = result.get("details", {})
@@ -125,7 +125,7 @@ class TradingOrchestrator:
         print("🔍 AGENT 1: Market Analyst - Fetching Data")
         print("=" * 60)
 
-        market_data = {"stocks": {}, "crypto": {}, "timestamp": datetime.now().isoformat()}
+        market_data = {"stocks": {}, "timestamp": datetime.now().isoformat()}
 
         for symbol in self.watchlist_stocks:
             try:
@@ -156,39 +156,6 @@ class TradingOrchestrator:
                         "market_score": round(market_score, 4),
                     }
                     print(f"  ✅ {symbol}: ${latest_close:.2f} | mkt_score={market_score:.3f}")
-                else:
-                    print(f"  ⚠️  {symbol}: No data")
-            except Exception as e:
-                print(f"  ❌ {symbol}: Error - {e}")
-
-        for symbol in self.watchlist_crypto:
-            try:
-                bars = self._get_bars(symbol, "crypto")
-                if bars is not None and len(bars) > 0:
-                    latest_close = float(bars["close"].iloc[-1])
-                    latest_volume = float(bars["volume"].iloc[-1])
-                    avg_volume_20d = float(bars["volume"].tail(20).mean())
-                    high_90d = float(bars["high"].max())
-                    low_90d = float(bars["low"].min())
-
-                    vol_ratio = latest_volume / max(avg_volume_20d, 1)
-                    range_90d = high_90d - low_90d
-                    range_position = (latest_close - low_90d) / range_90d if range_90d > 0 else 0.5
-                    vol_score = min(1.0, (vol_ratio - 1.0) * 0.5) if vol_ratio > 1.0 else max(-0.5, (vol_ratio - 1.0))
-                    range_score = (range_position - 0.5)  # Near top -> positive (breakout), near bottom -> negative (downtrend)
-                    market_score = 0.5 * vol_score + 0.5 * range_score
-                    market_score = max(-1.0, min(1.0, market_score))
-
-                    market_data["crypto"][symbol] = {
-                        "bars_count": len(bars),
-                        "latest_close": latest_close,
-                        "latest_volume": latest_volume,
-                        "high_90d": high_90d,
-                        "low_90d": low_90d,
-                        "avg_volume_20d": avg_volume_20d,
-                        "market_score": round(market_score, 4),
-                    }
-                    print(f"  ✅ {symbol}: ${latest_close:,.2f} | mkt_score={market_score:.3f}")
                 else:
                     print(f"  ⚠️  {symbol}: No data")
             except Exception as e:
@@ -268,7 +235,7 @@ class TradingOrchestrator:
         print("📊 AGENT 2: Technical Analyst - Computing Signals")
         print("=" * 60)
 
-        signals = {"stocks": {}, "crypto": {}, "timestamp": datetime.now().isoformat()}
+        signals = {"stocks": {}, "timestamp": datetime.now().isoformat()}
 
         # Stocks — use 300 days to get ~200 trading days for EMA-200 convergence
         for symbol in self.watchlist_stocks:
@@ -282,19 +249,6 @@ class TradingOrchestrator:
                           f"trend={signal.trend} | RSI={signal.rsi:.1f}")
                 else:
                     print(f"  ⚠️  {symbol}: Insufficient data for analysis")
-            except Exception as e:
-                print(f"  ❌ {symbol}: Error - {e}")
-
-        # Crypto — use 300 days for EMA-200 convergence
-        for symbol in self.watchlist_crypto:
-            try:
-                bars = self._get_bars(symbol, "crypto", lookback_days=300)
-                if bars is not None and len(bars) >= 50:
-                    signal = self.tech_analyzer.analyze(bars, symbol, "1Day")
-                    signals["crypto"][symbol] = signal.to_dict()
-                    emoji = "🟢" if signal.score > 0.3 else "🔴" if signal.score < -0.3 else "🟡"
-                    print(f"  {emoji} {symbol}: score={signal.score:.3f} | "
-                          f"trend={signal.trend} | RSI={signal.rsi:.1f}")
             except Exception as e:
                 print(f"  ❌ {symbol}: Error - {e}")
 
@@ -313,7 +267,6 @@ class TradingOrchestrator:
 
         sentiment = self.sentiment_analyzer.analyze_all(
             stocks=self.watchlist_stocks,
-            crypto=self.watchlist_crypto,
             days=3,
         )
 
@@ -542,14 +495,12 @@ class TradingOrchestrator:
             composite = (weighted_tech + weighted_mkt + weighted_sent) / total_weight if total_weight > 0 else 0
             composite = max(-1.0, min(1.0, composite))
 
-            order_symbol = symbol.replace("/", "") if asset_type == "crypto" else symbol
-
             if composite >= min_buy or composite <= -min_sell:
                 side = "buy" if composite >= min_buy else "sell"
                 emoji = "🟢" if side == "buy" else "🔴"
                 print(f"  {emoji} {symbol}: composite={composite:.3f} (conf: tech={tech_conf:.2f} sent={sent_conf:.2f}) → {side.upper()} CANDIDATE")
                 return {
-                    "symbol": order_symbol,
+                    "symbol": symbol,
                     "asset_type": asset_type,
                     "side": side,
                     "composite_score": round(composite, 4),
@@ -575,16 +526,6 @@ class TradingOrchestrator:
             if market_data:
                 mkt_score = market_data.get("stocks", {}).get(symbol, {}).get("market_score", 0.0)
             result = _score_symbol(symbol, signal, sent_data, mkt_score, "stock")
-            if result:
-                candidates.append(result)
-
-        # Process crypto
-        for symbol, signal in tech_signals.get("crypto", {}).items():
-            sent_data = sentiment.get("symbols", {}).get(symbol, {})
-            mkt_score = 0.0
-            if market_data:
-                mkt_score = market_data.get("crypto", {}).get(symbol, {}).get("market_score", 0.0)
-            result = _score_symbol(symbol, signal, sent_data, mkt_score, "crypto")
             if result:
                 candidates.append(result)
 
@@ -615,7 +556,7 @@ class TradingOrchestrator:
             clock = self.client.is_market_open()
             if not clock["is_open"]:
                 print(f"  ⚠️  Market is currently CLOSED. Next open: {clock['next_open']}")
-                print(f"  ⚠️  Stock orders will be queued until market opens. Crypto unaffected.")
+                print(f"  ⚠️  Stock orders will be queued until market opens.")
         except Exception as e:
             print(f"  ⚠️  Could not check market hours: {e}")
 
@@ -784,10 +725,7 @@ class TradingOrchestrator:
         cache_key = (symbol, timeframe, lookback_days)
         if cache_key in self._bar_cache:
             return self._bar_cache[cache_key]
-        if asset_type == "crypto":
-            bars = self.client.get_crypto_bars(symbol, timeframe, lookback_days)
-        else:
-            bars = self.client.get_stock_bars(symbol, timeframe, lookback_days)
+        bars = self.client.get_stock_bars(symbol, timeframe, lookback_days)
         if bars is not None:
             self._bar_cache[cache_key] = bars
         return bars

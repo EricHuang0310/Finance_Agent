@@ -7,12 +7,29 @@ These functions are called by Claude Agent Team teammates and the Lead agent.
 """
 
 import json
-import math
 from datetime import datetime
 from pathlib import Path
 
+from src.state_dir import get_state_dir
 
-STATE_DIR = Path("shared_state")
+
+def _get_state_dir() -> Path:
+    return get_state_dir()
+
+
+# Lazy accessor — all references below use STATE_DIR which resolves at call time
+class _LazyStateDir:
+    """Proxy that resolves to the daily shared_state dir on first attribute access."""
+    def __truediv__(self, other):
+        return _get_state_dir() / other
+    def mkdir(self, **kwargs):
+        _get_state_dir().mkdir(**kwargs)
+    def __str__(self):
+        return str(_get_state_dir())
+    def __fspath__(self):
+        return str(_get_state_dir())
+
+STATE_DIR = _LazyStateDir()
 
 
 def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
@@ -30,8 +47,7 @@ def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
     if tech_path.exists():
         with open(tech_path) as f:
             tech_data = json.load(f)
-        # Search in both stocks and crypto
-        sig = tech_data.get("stocks", {}).get(symbol) or tech_data.get("crypto", {}).get(symbol, {})
+        sig = tech_data.get("stocks", {}).get(symbol, {})
         context["technical_signals"] = sig
 
     # Load sentiment signals
@@ -46,7 +62,7 @@ def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
     if mkt_path.exists():
         with open(mkt_path) as f:
             mkt_data = json.load(f)
-        mkt_sym = mkt_data.get("stocks", {}).get(symbol) or mkt_data.get("crypto", {}).get(symbol, {})
+        mkt_sym = mkt_data.get("stocks", {}).get(symbol, {})
         context["market_data"] = mkt_sym
         context["market_regime"] = mkt_data.get("market_regime", "neutral")
 
@@ -88,50 +104,6 @@ def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
     return context
 
 
-def task_prepare_risk_context(trade: dict, orchestrator) -> dict:
-    """Assemble risk debate context for a single approved trade.
-
-    Called by Lead Agent before spawning Aggressive/Conservative/Neutral/Judge.
-    """
-    symbol = trade.get("symbol", "")
-    context = {
-        "symbol": symbol,
-        "timestamp": datetime.now().isoformat(),
-        "trade_plan": trade,
-    }
-
-    # Portfolio state from risk manager
-    risk_path = STATE_DIR / "risk_assessment.json"
-    if risk_path.exists():
-        with open(risk_path) as f:
-            context["risk_summary"] = json.load(f).get("summary", {})
-
-    # Load all signals for context
-    for fname, key in [
-        ("technical_signals.json", "technical_signals"),
-        ("sentiment_signals.json", "sentiment"),
-        ("market_overview.json", "market_data"),
-        ("fundamentals_signals.json", "fundamentals"),
-    ]:
-        path = STATE_DIR / fname
-        if path.exists():
-            with open(path) as f:
-                context[key] = json.load(f)
-
-    # Retrieve past risk memories
-    situation_text = _build_situation_text(context)
-    context["past_memories_risk"] = [
-        m["lesson"] for m in orchestrator.risk_judge_memory.search(situation_text, top_k=2)
-    ]
-
-    # Save context file
-    out_path = STATE_DIR / f"risk_debate_context_{symbol}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(context, f, ensure_ascii=False, indent=2, default=str)
-
-    return context
-
-
 def task_merge_debate_results(candidates: list[dict]) -> list[dict]:
     """Merge debate score_adjustments back into candidate list.
 
@@ -156,34 +128,6 @@ def task_merge_debate_results(candidates: list[dict]) -> list[dict]:
     # Re-sort by absolute score after adjustments
     candidates.sort(key=lambda x: abs(x.get("composite_score", 0)), reverse=True)
     return candidates
-
-
-def task_merge_risk_debate_results(trades: list[dict]) -> list[dict]:
-    """Apply risk debate qty_ratio and adjusted stop/target to trades.
-
-    Risk Judge can only reduce qty (qty_ratio 0.5-1.0), never increase.
-    """
-    for trade in trades:
-        symbol = trade.get("symbol", "")
-        result_path = STATE_DIR / f"risk_debate_{symbol}_result.json"
-        if result_path.exists():
-            with open(result_path) as f:
-                result = json.load(f)
-
-            qty_ratio = max(0.5, min(1.0, result.get("qty_ratio", 1.0)))
-            original_qty = trade.get("suggested_qty", 0)
-            trade["suggested_qty_before_debate"] = original_qty
-            trade["suggested_qty"] = max(1, math.floor(original_qty * qty_ratio))
-            trade["risk_debate_qty_ratio"] = qty_ratio
-            trade["risk_debate_rationale"] = result.get("rationale", "")
-
-            # Apply adjusted stop/target if provided
-            if result.get("adjusted_stop_loss"):
-                trade["stop_loss"] = result["adjusted_stop_loss"]
-            if result.get("adjusted_take_profit"):
-                trade["take_profit"] = result["adjusted_take_profit"]
-
-    return trades
 
 
 def _build_situation_text(context: dict) -> str:

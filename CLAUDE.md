@@ -32,7 +32,7 @@ There are no automated tests, linter, or formatter configured.
 Multi-agent trading system using Alpaca API (paper/live). Strategy is **momentum/trend-following** with **one-shot execution** (no continuous monitoring).
 
 Supports two modes:
-- **Agent Teams mode**: Full pipeline with investment debate, risk debate, and reflection (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
+- **Agent Teams mode**: Full pipeline with investment debate and reflection (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
 - **Standalone mode**: Pure rule-based pipeline; debate/reflection phases are skipped, but confidence weighting and market regime detection still apply
 
 ### Agent Directory Structure
@@ -49,12 +49,8 @@ agents/
 │   ├── bull_researcher.md
 │   ├── bear_researcher.md
 │   └── research_judge.md
-├── risk_mgmt/         # Phase 3-3.5 risk assessment & debate
-│   ├── risk_manager.md
-│   ├── aggressive_analyst.md
-│   ├── conservative_analyst.md
-│   ├── neutral_analyst.md
-│   └── risk_judge.md
+├── risk_mgmt/         # Phase 3 risk assessment
+│   └── risk_manager.md
 ├── trader/            # Phase 1.5, 2, 4 position management & execution
 │   ├── decision_engine.md
 │   ├── position_reviewer.md
@@ -103,7 +99,6 @@ Phase 1.8: Market Regime Detection   [Lead]         (SPY EMA alignment → risk_
 Phase 2:   Decision Engine           [Lead]         (confidence-weighted + regime-adjusted scoring)
 Phase 2.5: Investment Debate         [Teammate ×3]  (Bull/Bear/Judge; Top-N only; Agent Teams mode)
 Phase 3:   Risk Manager              [Subagent]     (hard rules: veto power, kill switch)
-Phase 3.5: Risk Debate               [Teammate ×4]  (Aggressive/Conservative/Neutral/Judge; Agent Teams mode)
 Phase 4:   Executor                  [Subagent]     (exits first, then new entries)
 Phase 5:   Reporter                  [Subagent]     (Telegram notifications + debate summaries)
 Phase 6:   Reflection                [Teammate]     (post-trade learning; Agent Teams mode)
@@ -113,11 +108,11 @@ Phase 6:   Reflection                [Teammate]     (post-trade learning; Agent 
 
 - **Lead direct** — Lead agent calls `task_*()` Python functions directly. No spawn needed. (Decision Engine, Market Regime)
 - **Subagent** — Agent spec (`agents/*.md`) is self-contained: includes role, scoring logic, execution code, I/O schema. Read the spec, use it as Task tool prompt. (Analysts, Screener, Exit Review, Risk Manager, Executor, Reporter)
-- **Teammate** — Full independent agent with LLM reasoning. Required for debate/reflection where argumentation matters. (Bull/Bear/Research Judge, Risk Debate panel, Reflection Analyst)
+- **Teammate** — Full independent agent with LLM reasoning. Required for debate/reflection where argumentation matters. (Bull/Bear/Research Judge, Reflection Analyst)
 
 ### Inter-agent Communication
 
-Agents communicate via JSON files in `shared_state/`. Each agent writes its output file; downstream agents read from them. Debate agents follow the same pattern — each role writes its arguments/verdict to `shared_state/debate_{symbol}_*.json` or `shared_state/risk_debate_{symbol}_*.json`.
+Agents communicate via JSON files in `shared_state/YYYY-MM-DD/` (daily subfolder). The orchestrator freezes today's date in the `SHARED_STATE_DIR` env var at startup; all modules and agent subprocesses read from it via `src.state_dir.get_state_dir()`. Old daily folders are auto-cleaned after 7 days. Each agent writes its output file; downstream agents read from them. Debate agents follow the same pattern — each role writes its arguments/verdict to `{STATE_DIR}/debate_{symbol}_*.json`.
 
 ### Memory System (BM25)
 
@@ -139,16 +134,6 @@ Only Top-N candidates (default 3) by composite score enter debate:
 
 The `score_adjustment` is added to the composite score, not a replacement.
 
-### Risk Debate (Phase 3.5, Agent Teams only)
-
-Only trades that pass hard risk rules enter debate:
-1. **Aggressive Analyst** (`agents/risk_mgmt/aggressive_analyst.md`) — argues for larger position
-2. **Conservative Analyst** (`agents/risk_mgmt/conservative_analyst.md`) — argues for smaller position
-3. **Neutral Analyst** (`agents/risk_mgmt/neutral_analyst.md`) — balanced view
-4. **Risk Judge** (`agents/risk_mgmt/risk_judge.md`) — verdict: `qty_ratio` (0.5-1.0), adjusted stop/target
-
-Hard rules (kill switch, exposure limits) are non-negotiable. Debate can only reduce position size.
-
 ### Key Design Decisions
 
 - **Bar cache**: `TradingOrchestrator._bar_cache` deduplicates API calls within a single run, keyed by `(symbol, timeframe, lookback_days)`.
@@ -157,13 +142,6 @@ Hard rules (kill switch, exposure limits) are non-negotiable. Debate can only re
 - **Market Regime**: SPY EMA20/50/200 alignment. `risk_on` boosts tech weight, `risk_off` boosts market weight.
 - **Position exit**: 4 weighted criteria (trend reversal 0.35, momentum weakening 0.25, ATR trailing stop 0.25, market context 0.15). `exit_score >= 0.5` triggers close.
 
-### Crypto Symbol Conventions
-
-- Data API calls: `BTC/USD` (with slash)
-- Order placement: `BTCUSD` (slash stripped)
-- Alpaca positions: `BTCUSD` format
-- `PositionReviewer` auto-converts via `_CRYPTO_BASES` set
-
 ## Configuration
 
 - `config/.env` — API keys (Alpaca, Telegram, optional Finnhub/NewsAPI). Copy from `.env.example`.
@@ -171,7 +149,7 @@ Hard rules (kill switch, exposure limits) are non-negotiable. Debate can only re
 - `watchlist_mode: dynamic|static` controls whether the screener (Phase 0) runs.
 - `risk.kill_switch_pct` halts all trading when daily loss exceeds threshold.
 - `debate.top_n` — number of top candidates entering investment debate (default 3).
-- `debate.investment_rounds` / `debate.risk_rounds` — debate rounds per candidate.
+- `debate.investment_rounds` — debate rounds per candidate.
 - `memory.storage_dir` — directory for BM25 memory JSON files (default `memory_store`).
 - Agent specs in `agents/{analysts,researchers,risk_mgmt,trader,reporting,reflection}/*.md` are written in Chinese. Subagent specs are self-contained (include execution code, I/O schema) and can be used directly as Task tool prompts.
 - User-invocable skills in `.claude/skills/` (5 total): `run-full-pipeline`, `check-portfolio`, `run-market-analysis`, `run-position-review`, `search-memory`.

@@ -24,10 +24,6 @@
 
 ### Critical（需立即修復）
 
-- [x] **Bug-1**: Crypto 訂單 TimeInForce 錯誤 — `src/alpaca_client.py`
-  - 新增 `_is_crypto_symbol()` 偵測函數
-  - `place_market_order` 和 `place_bracket_order` 自動偵測 crypto → 用 GTC，stock → 用 DAY
-
 - [x] **Bug-2**: `entry_price=None` 會導致 risk manager 崩潰 — `src/orchestrator.py` + `src/agents_launcher.py`
   - `run_risk_manager` 加 None guard，跳過缺少 entry_price 的候選
   - 所有 `entry_price:.2f` 格式化加條件保護

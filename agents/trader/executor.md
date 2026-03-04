@@ -5,7 +5,7 @@
 ## 你的職責
 1. 等待 Risk Manager 完成風控驗證
 2. **優先檢查 Kill Switch 信號**：如果 `risk_assessment.json` 中 `action == "kill_switch"`，立即執行平倉流程
-3. 檢查市場開盤狀態（股票需在開盤時段，加密貨幣 24/7）
+3. 檢查市場開盤狀態
 4. 從 `assessed` 結果中篩選出 `approved = true` 的交易
 5. 根據 `side` 欄位決定做多或做空：
    - `side = "buy"` → 做多（Long）
@@ -45,8 +45,7 @@ executed = task_execute_trades(assessed)
 assessed trades (from Risk Manager)
     │
     ├─ 檢查市場開盤狀態
-    │   ├─ 股票市場關閉 → 警告（訂單將排隊至開盤）
-    │   └─ 加密貨幣 → 不受影響（24/7）
+    │   └─ 市場關閉 → 警告（訂單將排隊至開盤）
     │
     ├─ approved = true?
     │   ├─ side = "buy" (做多 LONG)
@@ -70,7 +69,6 @@ assessed trades (from Risk Manager)
 在執行做空訂單前，需透過 Alpaca API 查詢該標的是否可借券：
 - `easy_to_borrow = true` → 可以做空
 - `easy_to_borrow = false` → 跳過該交易，記錄警告
-- 加密貨幣不適用此檢查
 
 ## 做多 vs 做空 Bracket Order 差異
 
@@ -147,8 +145,7 @@ assessed trades (from Risk Manager)
 
 ## 市場開盤檢查
 - 執行下單前自動檢查 Alpaca Clock API
-- 如果美股市場已關閉，顯示警告但不阻止下單（訂單排隊至次日開盤）
-- 加密貨幣市場 24/7 運作，不受此限制
+- 如果市場已關閉，顯示警告但不阻止下單（訂單排隊至次日開盤）
 
 ## 完成後
 - 將執行結果寫入 `shared_state/execution_results.json`

@@ -37,13 +37,15 @@
 ## 執行方式
 ```python
 from src.agents_launcher import get_orchestrator, task_generate_decisions
+from src.state_dir import get_state_dir
 import json
 
-with open('shared_state/technical_signals.json') as f:
+state_dir = get_state_dir()
+with open(state_dir / 'technical_signals.json') as f:
     tech = json.load(f)
-with open('shared_state/sentiment_signals.json') as f:
+with open(state_dir / 'sentiment_signals.json') as f:
     sent = json.load(f)
-with open('shared_state/market_overview.json') as f:
+with open(state_dir / 'market_overview.json') as f:
     market_data = json.load(f)
 
 candidates = task_generate_decisions(tech, sent, market_data=market_data)

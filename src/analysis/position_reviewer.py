@@ -12,11 +12,6 @@ import pandas as pd
 from src.analysis.technical import TechnicalAnalyzer, TechnicalSignal
 
 
-# Known crypto base symbols for format conversion (BTCUSD → BTC/USD)
-_CRYPTO_BASES = {"BTC", "ETH", "SOL", "DOGE", "AVAX", "LINK", "DOT", "MATIC", "ADA", "XRP",
-                 "LTC", "UNI", "AAVE", "SHIB", "BCH"}
-
-
 @dataclass
 class ExitSignal:
     """Result of exit evaluation for a single position."""
@@ -163,28 +158,26 @@ class PositionReviewer:
 
         Args:
             positions: from AlpacaClient.get_positions()
-            tech_signals: {"stocks": {...}, "crypto": {...}} from technical analyst
-            market_data: {"stocks": {...}, "crypto": {...}} from market analyst
+            tech_signals: {"stocks": {...}} from technical analyst
+            market_data: {"stocks": {...}} from market analyst
             bars_getter: callable(symbol, asset_type) -> pd.DataFrame
         """
         results = []
 
         for pos in positions:
             symbol = pos["symbol"]
-            asset_type = self._detect_asset_type(symbol)
-            bars_symbol = self._to_bars_symbol(symbol) if asset_type == "crypto" else symbol
 
             # Get or compute technical signal
-            tech_signal = self._get_tech_signal(symbol, bars_symbol, asset_type, tech_signals, bars_getter)
+            tech_signal = self._get_tech_signal(symbol, symbol, "stock", tech_signals, bars_getter)
             if tech_signal is None:
                 print(f"  ⚠️  {symbol}: cannot analyze, skipping exit review")
                 continue
 
             # Get market score
-            market_score = self._get_market_score(symbol, asset_type, market_data)
+            market_score = self._get_market_score(symbol, "stock", market_data)
 
             # Get bars for trailing stop
-            bars = bars_getter(bars_symbol, asset_type)
+            bars = bars_getter(symbol, "stock")
 
             signal = self.review_position(pos, tech_signal, market_score, bars)
             results.append(signal)
@@ -200,7 +193,7 @@ class PositionReviewer:
         bars_getter: Callable,
     ) -> Optional[TechnicalSignal]:
         """Get tech signal from cache or compute on-demand."""
-        category = "crypto" if asset_type == "crypto" else "stocks"
+        category = "stocks"
         cached = tech_signals.get(category, {})
 
         # Try exact match first (position symbol or bars symbol)
@@ -218,24 +211,4 @@ class PositionReviewer:
 
     def _get_market_score(self, symbol: str, asset_type: str, market_data: dict) -> float:
         """Get market score for a symbol, defaulting to 0."""
-        category = "crypto" if asset_type == "crypto" else "stocks"
-        return market_data.get(category, {}).get(symbol, {}).get("market_score", 0.0)
-
-    @staticmethod
-    def _detect_asset_type(symbol: str) -> str:
-        """Detect if a position symbol is crypto or stock."""
-        # Alpaca crypto positions use symbols like BTCUSD, ETHUSD
-        if symbol.endswith("USD") and len(symbol) >= 6:
-            base = symbol[:-3]
-            if base in _CRYPTO_BASES:
-                return "crypto"
-        return "stock"
-
-    @staticmethod
-    def _to_bars_symbol(symbol: str) -> str:
-        """Convert position symbol to bars API format (BTCUSD → BTC/USD)."""
-        if symbol.endswith("USD") and len(symbol) >= 6:
-            base = symbol[:-3]
-            if base in _CRYPTO_BASES:
-                return f"{base}/USD"
-        return symbol
+        return market_data.get("stocks", {}).get(symbol, {}).get("market_score", 0.0)

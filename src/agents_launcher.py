@@ -19,14 +19,13 @@ from pathlib import Path
 # Ensure project root is in path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.state_dir import get_state_dir
 from src.alpaca_client import AlpacaClient
 from src.orchestrator import TradingOrchestrator
 from src.notifications.telegram import TelegramNotifier
 from src.debate.helpers import (
     task_prepare_debate_context,
-    task_prepare_risk_context,
     task_merge_debate_results,
-    task_merge_risk_debate_results,
 )
 from src.memory.reflection import (
     get_unreflected_trades,
@@ -63,7 +62,7 @@ def task_symbol_screener() -> dict:
     print("🔎 [Symbol Screener] Starting market screening...")
     orch = get_orchestrator()
     result = orch.run_symbol_screener()
-    print(f"🔎 [Symbol Screener] ✅ Complete: {len(result['stocks'])} stocks, {len(result['crypto'])} crypto")
+    print(f"🔎 [Symbol Screener] ✅ Complete: {len(result['stocks'])} stocks")
     return result
 
 
@@ -102,8 +101,9 @@ def task_position_review() -> list[dict]:
     # Load tech signals and market data from shared state
     tech_signals = {}
     market_data = {}
-    tech_path = Path("shared_state/technical_signals.json")
-    market_path = Path("shared_state/market_overview.json")
+    state_dir = get_state_dir()
+    tech_path = state_dir / "technical_signals.json"
+    market_path = state_dir / "market_overview.json"
     if tech_path.exists():
         with open(tech_path) as f:
             tech_signals = json.load(f)
@@ -207,9 +207,7 @@ def task_execute_trades(assessed: list[dict]) -> list[dict]:
     try:
         clock = orch.client.is_market_open()
         if not clock["is_open"]:
-            has_stock_trades = any(t.get("asset_type") != "crypto" for t in approved)
-            if has_stock_trades:
-                print(f"  ⚠️  Market closed. Stock orders will queue. Next open: {clock['next_open']}")
+            print(f"  ⚠️  Market closed. Orders will queue until open. Next open: {clock['next_open']}")
     except Exception:
         pass
 
@@ -273,9 +271,8 @@ def task_execute_trades(assessed: list[dict]) -> list[dict]:
             for t in executed
         ],
     }
-    state_dir = Path("shared_state")
-    state_dir.mkdir(exist_ok=True)
-    with open(state_dir / "execution_results.json", "w") as f:
+    exec_state_dir = get_state_dir()
+    with open(exec_state_dir / "execution_results.json", "w") as f:
         json.dump(execution_results, f, indent=2, default=str)
 
     print(f"⚡ [Executor] ✅ Complete: {len(executed)}/{len(approved)} orders placed")
@@ -292,13 +289,14 @@ def task_send_report():
     notifier.report_portfolio(account, positions)
 
     # Load latest decisions
-    decisions_path = Path("shared_state/decisions.json")
+    report_state_dir = get_state_dir()
+    decisions_path = report_state_dir / "decisions.json"
     if decisions_path.exists():
         with open(decisions_path) as f:
             decisions = json.load(f)
 
         candidates = decisions.get("candidates", [])
-        risk_path = Path("shared_state/risk_assessment.json")
+        risk_path = report_state_dir / "risk_assessment.json"
         if risk_path.exists():
             with open(risk_path) as f:
                 risk_data = json.load(f)
@@ -350,24 +348,6 @@ def task_merge_debates(candidates: list[dict]) -> list[dict]:
     print("🔀 [Debate Merge] Merging debate results...")
     result = task_merge_debate_results(candidates)
     print(f"🔀 [Debate Merge] ✅ Merged {len(result)} candidates")
-    return result
-
-
-def task_prepare_risk_debate(trade: dict) -> dict:
-    """Prepare risk debate context for a single approved trade."""
-    symbol = trade.get("symbol", "")
-    print(f"📝 [Risk Debate Prep] Assembling context for {symbol}...")
-    orch = get_orchestrator()
-    context = task_prepare_risk_context(trade, orch)
-    print(f"📝 [Risk Debate Prep] ✅ Context saved to shared_state/risk_debate_context_{symbol}.json")
-    return context
-
-
-def task_merge_risk_debates(trades: list[dict]) -> list[dict]:
-    """Merge risk debate qty_ratio and adjusted stop/target into trades."""
-    print("🔀 [Risk Debate Merge] Merging risk debate results...")
-    result = task_merge_risk_debate_results(trades)
-    print(f"🔀 [Risk Debate Merge] ✅ Merged {len(result)} trades")
     return result
 
 
@@ -460,9 +440,6 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
     approved = [t for t in assessed if t.get("approved")]
     rejected = [t for t in assessed if not t.get("approved")]
 
-    # Phase 3.5: Risk Debate skipped in standalone mode
-    print("  ℹ️  Standalone mode: Risk Debate (Phase 3.5) skipped — use Agent Teams for debate")
-
     # Phase 4: Notify
     if notify:
         for trade in approved:
@@ -513,7 +490,7 @@ AGENT_TEAMS_PROMPT = """
 # ─── Copy this into Claude Code after enabling Agent Teams ───
 
 啟動一個 trading-analysis agent team 來分析市場並生成交易建議。
-此 pipeline 包含投資辯論和風控辯論環節，模擬真實投資團隊的決策流程。
+此 pipeline 包含投資辯論環節，模擬真實投資團隊的決策流程。
 
 ## 架構說明
 - **Subagent** = 讀取對應 agent spec（`agents/` 下的 .md），整份內容作為 Task tool prompt spawn 執行
@@ -550,12 +527,14 @@ AGENT_TEAMS_PROMPT = """
 **[Lead 直接執行]** Decision Engine — 純 Python 分數聚合：
 ```python
 from src.agents_launcher import task_generate_decisions
+from src.state_dir import get_state_dir
 import json
-with open('shared_state/technical_signals.json') as f:
+state_dir = get_state_dir()
+with open(state_dir / 'technical_signals.json') as f:
     tech = json.load(f)
-with open('shared_state/sentiment_signals.json') as f:
+with open(state_dir / 'sentiment_signals.json') as f:
     sent = json.load(f)
-with open('shared_state/market_overview.json') as f:
+with open(state_dir / 'market_overview.json') as f:
     market = json.load(f)
 candidates = task_generate_decisions(tech, sent, market)
 ```
@@ -594,32 +573,7 @@ candidates = task_merge_debates(candidates)
 
 ---
 
-## Phase 3.5 (Risk Debate, 對每筆通過硬規則的交易)
-
-**[Lead]** 準備風控辯論上下文：
-```python
-from src.agents_launcher import task_prepare_risk_debate
-for trade in approved:
-    task_prepare_risk_debate(trade)
-```
-
-### 風控辯論（對每筆 approved 交易，可並行）
-**[Teammates]** 依序 spawn：
-- **aggressive-analyst-{symbol}** (model="sonnet") → 讀取 `agents/risk_mgmt/aggressive_analyst.md`。使用 `model="sonnet"`。
-- **conservative-analyst-{symbol}** (等 aggressive 完成, model="sonnet") → 讀取 `agents/risk_mgmt/conservative_analyst.md`。使用 `model="sonnet"`。
-- **neutral-analyst-{symbol}** (等 conservative 完成, model="sonnet") → 讀取 `agents/risk_mgmt/neutral_analyst.md`。使用 `model="sonnet"`。
-- **risk-judge-{symbol}** (等 neutral 完成, Opus 預設) → 讀取 `agents/risk_mgmt/risk_judge.md`。不指定 model，使用預設 Opus。
-  → 裁決 qty_ratio (0.5~1.0) + 調整 stop_loss / take_profit
-
-**[Lead]** 合併風控辯論結果：
-```python
-from src.agents_launcher import task_merge_risk_debates
-approved = task_merge_risk_debates(approved)
-```
-
----
-
-## Phase 4 (Execution, 等 Phase 3.5 完成)
+## Phase 4 (Execution, 等 Phase 3 完成)
 **[Subagent, model="haiku"]** 讀取 `agents/trader/executor.md`，附加輸入參數 `assessed = 風控評估後的交易列表` 到 prompt 末尾，用 Task tool spawn 執行。使用 `model="haiku"`。
 
 ---
@@ -653,7 +607,6 @@ for trade_record in unreflected:
 
 最後匯報所有結果給我，包括：
 - 辯論摘要（各候選的 Bull/Bear 核心論點和 Judge 裁決）
-- 風控辯論摘要（各交易的倉位調整和理由）
 - 已下單的交易明細
 - 反思結果（如有）
 """

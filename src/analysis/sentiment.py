@@ -109,13 +109,12 @@ class SentimentAnalyzer:
             "top_headlines": top_headlines,
         }
 
-    def analyze_all(self, stocks: list[str], crypto: list[str], days: int = 3) -> dict:
+    def analyze_all(self, stocks: list[str], days: int = 3) -> dict:
         """Run sentiment analysis for all watchlist symbols."""
         symbols_data = {}
         all_scores = []
 
-        all_symbols = stocks + crypto
-        for symbol in all_symbols:
+        for symbol in stocks:
             result = self.analyze_symbol(symbol, days=days)
             symbols_data[symbol] = result
             if result["news_count"] > 0:

@@ -5,7 +5,7 @@
 > 本系統採用**動量/趨勢追蹤**策略，篩選重點是找出正在形成或延續趨勢的標的，而非均值回歸的超買超賣機會。
 
 ## 你的職責
-1. 從一個廣泛的股票/加密貨幣候選池中，根據量化指標自動篩選出具備強勁動能的標的
+1. 從一個廣泛的股票候選池中，根據量化指標自動篩選出具備強勁動能的標的
 2. 替代手動設定的 watchlist，讓系統自主發現趨勢機會
 3. 將篩選結果寫入 `shared_state/dynamic_watchlist.json`，供後續所有 Agent 使用
 
@@ -16,9 +16,9 @@
 - **流動性門檻** — 最低價格、最低均量（避免低流動性標的）
 
 ## 篩選流程
-1. 從內建的候選池（約 90+ 支股票、10+ 加密貨幣）中逐一拉取近 20 日 K 線
+1. 從內建的候選池（約 90+ 支股票）中逐一拉取近 20 日 K 線
 2. 計算每支標的的 `activity_score`（綜合評分）
-3. 依 activity_score 排序，取前 N 名（stocks: 20, crypto: 5，可在 config 調整）
+3. 依 activity_score 排序，取前 N 名（stocks: 20，可在 config 調整）
 4. 輸出動態 watchlist
 
 ## 執行方式
@@ -33,7 +33,6 @@ result = task_symbol_screener()
 
 篩選參數（來自 `config/settings.yaml`）：
 - `max_stocks`: 最大股票數（預設 20）
-- `max_crypto`: 最大加密貨幣數（預設 5）
 - `min_price` / `max_price`: 價格範圍
 - `min_avg_volume`: 最低平均成交量
 - `lookback_days`: 回看天數
@@ -43,7 +42,6 @@ result = task_symbol_screener()
 ```json
 {
   "stocks": ["NVDA", "TSLA", "AMD"],
-  "crypto": ["BTC/USD", "ETH/USD"],
   "details": {
     "NVDA": {
       "latest_close": 135.5,
@@ -54,7 +52,7 @@ result = task_symbol_screener()
     }
   },
   "timestamp": "...",
-  "screened_from": {"stock_universe": 90, "crypto_universe": 10}
+  "screened_from": {"stock_universe": 90}
 }
 ```
 

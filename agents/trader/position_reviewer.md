@@ -89,10 +89,6 @@ exit_score >= exit_threshold (0.5) → exit_action = "close"（建議平倉）
 exit_score <  exit_threshold (0.5) → exit_action = "hold"（繼續持有）
 ```
 
-## 加密貨幣符號處理
-持倉中的加密貨幣符號格式為 `BTCUSD`，但數據 API 使用 `BTC/USD` 格式。
-Agent 會自動偵測並轉換（例：BTCUSD → BTC/USD）。
-
 ## 輸出
 `shared_state/exit_review.json`：
 ```json

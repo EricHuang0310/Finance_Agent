@@ -17,9 +17,6 @@ except ImportError:
     _HAS_YFINANCE = False
 
 
-# Crypto symbols that should skip fundamental analysis
-_CRYPTO_BASES = {"BTC", "ETH", "SOL", "DOGE", "ADA", "DOT", "AVAX", "MATIC", "LINK", "XRP"}
-
 
 @dataclass
 class FundamentalSignal:
@@ -41,12 +38,6 @@ class FundamentalSignal:
         return asdict(self)
 
 
-def _is_crypto(symbol: str) -> bool:
-    """Check if a symbol is a crypto pair (e.g. BTC/USD, BTCUSD)."""
-    base = symbol.replace("/", "").replace("USD", "")
-    return base in _CRYPTO_BASES
-
-
 def _format_large_number(n: Optional[float]) -> str:
     if n is None:
         return "N/A"
@@ -66,12 +57,9 @@ class FundamentalsAnalyzer:
     def analyze(self, symbol: str) -> Optional[FundamentalSignal]:
         """Fetch fundamental data for a single symbol.
 
-        Returns None for crypto or if yfinance is unavailable.
+        Returns None if yfinance is unavailable.
         """
         if not _HAS_YFINANCE:
-            return None
-
-        if _is_crypto(symbol):
             return None
 
         try:
@@ -137,5 +125,5 @@ class FundamentalsAnalyzer:
             if signal:
                 print(f"  📋 {signal.summary}")
             else:
-                print(f"  ⏭️  {symbol}: skipped (crypto or unavailable)")
+                print(f"  ⏭️  {symbol}: skipped (unavailable)")
         return results

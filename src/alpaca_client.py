@@ -1,6 +1,6 @@
 """
 Alpaca Markets API Client
-Wraps alpaca-py SDK for stock and crypto trading.
+Wraps alpaca-py SDK for stock trading.
 
 Requires:
     pip install alpaca-py
@@ -14,26 +14,13 @@ from dotenv import load_dotenv
 
 load_dotenv("config/.env")
 
-# Known crypto base symbols — used to detect crypto orders and set correct TimeInForce
-_CRYPTO_BASES = {"BTC", "ETH", "SOL", "DOGE", "AVAX", "LINK", "DOT", "MATIC", "ADA", "XRP",
-                 "LTC", "UNI", "AAVE", "SHIB", "BCH"}
-
-
-def _is_crypto_symbol(symbol: str) -> bool:
-    """Detect if a symbol is a crypto pair (e.g. BTCUSD, BTC/USD)."""
-    clean = symbol.replace("/", "")
-    if clean.endswith("USD"):
-        base = clean[:-3]
-        return base in _CRYPTO_BASES
-    return False
-
 
 class AlpacaClient:
     """Wrapper around Alpaca API for market data and trading."""
 
     def __init__(self):
         from alpaca.trading.client import TradingClient
-        from alpaca.data.historical import StockHistoricalDataClient, CryptoHistoricalDataClient
+        from alpaca.data.historical import StockHistoricalDataClient
 
         api_key = os.getenv("ALPACA_API_KEY")
         api_secret = os.getenv("ALPACA_API_SECRET")
@@ -44,7 +31,6 @@ class AlpacaClient:
 
         self.trading_client = TradingClient(api_key, api_secret, paper=self.is_paper)
         self.stock_data_client = StockHistoricalDataClient(api_key, api_secret)
-        self.crypto_data_client = CryptoHistoricalDataClient(api_key, api_secret)
         self._api_key = api_key
         self._api_secret = api_secret
 
@@ -77,29 +63,6 @@ class AlpacaClient:
 
         return df
 
-    def get_crypto_bars(self, symbol: str, timeframe: str = "1Day", lookback_days: int = 90):
-        """Fetch historical crypto bars as a DataFrame."""
-        import pandas as pd
-        from alpaca.data.requests import CryptoBarsRequest
-        from alpaca.data.timeframe import TimeFrame
-
-        tf_map = {"1Day": TimeFrame.Day, "1Hour": TimeFrame.Hour, "1Min": TimeFrame.Minute}
-        tf = tf_map.get(timeframe, TimeFrame.Day)
-
-        request = CryptoBarsRequest(
-            symbol_or_symbols=symbol,
-            timeframe=tf,
-            start=datetime.now() - timedelta(days=lookback_days),
-        )
-
-        bars = self.crypto_data_client.get_crypto_bars(request)
-        df = bars.df
-
-        if isinstance(df.index, pd.MultiIndex):
-            df = df.loc[symbol]
-
-        return df
-
     # ──────────────────────────────────────────────
     # News
     # ──────────────────────────────────────────────
@@ -111,7 +74,6 @@ class AlpacaClient:
 
         news_client = NewsClient(self._api_key, self._api_secret)
 
-        # Strip slash for crypto symbols (BTC/USD -> BTCUSD) for news query
         query_symbol = symbol.replace("/", "")
 
         request = NewsRequest(
@@ -182,13 +144,11 @@ class AlpacaClient:
         from alpaca.trading.enums import OrderSide, TimeInForce
 
         order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-        tif = TimeInForce.GTC if _is_crypto_symbol(symbol) else TimeInForce.DAY
-
         request = MarketOrderRequest(
             symbol=symbol,
             qty=qty,
             side=order_side,
-            time_in_force=tif,
+            time_in_force=TimeInForce.DAY,
         )
 
         order = self.trading_client.submit_order(request)
@@ -207,13 +167,12 @@ class AlpacaClient:
         from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
 
         order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-        tif = TimeInForce.GTC if _is_crypto_symbol(symbol) else TimeInForce.DAY
 
         request = MarketOrderRequest(
             symbol=symbol,
             qty=qty,
             side=order_side,
-            time_in_force=tif,
+            time_in_force=TimeInForce.DAY,
             order_class=OrderClass.BRACKET,
             take_profit=TakeProfitRequest(limit_price=take_profit_price),
             stop_loss=StopLossRequest(stop_price=stop_loss_price),

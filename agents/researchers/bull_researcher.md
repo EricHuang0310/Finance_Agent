@@ -16,15 +16,16 @@
 
 ## 執行方式
 ```python
-import json
+import json, os
 from pathlib import Path
+STATE_DIR = Path(os.environ.get("SHARED_STATE_DIR", "shared_state"))
 
 # 讀取辯論上下文
-with open(f'shared_state/debate_context_{symbol}.json') as f:
+with open(STATE_DIR / f'debate_context_{symbol}.json') as f:
     context = json.load(f)
 
 # 讀取 Bear 前一輪論點（如有）
-bear_path = Path(f'shared_state/debate_{symbol}_bear_r1.json')
+bear_path = STATE_DIR / f'debate_{symbol}_bear_r1.json'
 bear_argument = ""
 if bear_path.exists():
     with open(bear_path) as f:
@@ -44,7 +45,7 @@ if bear_path.exists():
 - 長度：300-500 字
 
 ## 輸出格式
-將你的論點寫入 `shared_state/debate_{symbol}_bull_r{round}.json`：
+將你的論點寫入 `STATE_DIR/debate_{symbol}_bull_r{round}.json`（STATE_DIR = 環境變數 `SHARED_STATE_DIR`，通常為 `shared_state/YYYY-MM-DD/`）：
 ```json
 {
   "role": "bull",

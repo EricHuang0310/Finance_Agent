@@ -23,14 +23,16 @@
 
 ## 執行方式
 ```python
-import json, glob
+import json, glob, os
+from pathlib import Path
+STATE_DIR = Path(os.environ.get("SHARED_STATE_DIR", "shared_state"))
 
 # 讀取辯論上下文
-with open(f'shared_state/debate_context_{symbol}.json') as f:
+with open(STATE_DIR / f'debate_context_{symbol}.json') as f:
     context = json.load(f)
 
 # 讀取所有辯論紀錄
-debate_files = sorted(glob.glob(f'shared_state/debate_{symbol}_*_r*.json'))
+debate_files = sorted(glob.glob(str(STATE_DIR / f'debate_{symbol}_*_r*.json')))
 debate_history = []
 for f_path in debate_files:
     with open(f_path) as f:
@@ -38,7 +40,7 @@ for f_path in debate_files:
 ```
 
 ## 輸出格式
-將裁決寫入 `shared_state/debate_{symbol}_result.json`：
+將裁決寫入 `STATE_DIR/debate_{symbol}_result.json`（STATE_DIR = 環境變數 `SHARED_STATE_DIR`，通常為 `shared_state/YYYY-MM-DD/`）：
 ```json
 {
   "symbol": "NVDA",

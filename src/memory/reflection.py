@@ -10,8 +10,21 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from src.state_dir import get_state_dir
 
-STATE_DIR = Path("shared_state")
+
+class _LazyStateDir:
+    """Proxy that resolves to the daily shared_state dir on first attribute access."""
+    def __truediv__(self, other):
+        return get_state_dir() / other
+    def mkdir(self, **kwargs):
+        get_state_dir().mkdir(**kwargs)
+    def __str__(self):
+        return str(get_state_dir())
+    def __fspath__(self):
+        return str(get_state_dir())
+
+STATE_DIR = _LazyStateDir()
 LOG_DIR = Path("logs")
 MEMORY_DIR = Path("memory_store")
 

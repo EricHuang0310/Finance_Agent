@@ -14,7 +14,6 @@ Phase 1.8: Market Regime Detection   (SPY EMA alignment → risk_on/risk_off/neu
 Phase 2:   Decision Engine           (confidence-weighted composite scoring)
 Phase 2.5: Investment Debate         (Bull/Bear/Judge; Agent Teams only)
 Phase 3:   Risk Manager              (veto power, kill switch)
-Phase 3.5: Risk Debate               (Aggressive/Conservative/Neutral/Judge; Agent Teams only)
 Phase 4:   Executor                  (exits first, then new entries)
 Phase 5:   Reporter                  (Telegram notifications)
 Phase 6:   Reflection                (post-trade learning; Agent Teams only)
@@ -24,7 +23,7 @@ The system runs in **one-shot mode** — execute once per invocation, no continu
 
 Two execution modes:
 - **Standalone mode** (`--run`): Pure rule-based pipeline; debate/reflection phases are skipped
-- **Agent Teams mode**: Full pipeline with investment debate, risk debate, and reflection (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
+- **Agent Teams mode**: Full pipeline with investment debate and reflection (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
 
 ## Setup
 
@@ -57,7 +56,7 @@ Edit `config/settings.yaml` to adjust:
 - `decision`: score thresholds for buy/sell signals
 - `risk`: position sizing, exposure limits, kill switch, max drawdown
 - `position_exit`: exit score threshold, ATR trailing stop multiplier
-- `debate`: top_n candidates, investment/risk debate rounds
+- `debate`: top_n candidates, investment debate rounds
 - `memory`: BM25 memory storage directory, max entries
 
 ## Usage
@@ -119,7 +118,7 @@ src/
 agents/
   analysts/                 # Phase 0-1 data collection agents
   researchers/              # Phase 2.5 investment debate (Bull/Bear/Judge)
-  risk_mgmt/                # Phase 3-3.5 risk assessment & debate
+  risk_mgmt/                # Phase 3 risk assessment
   trader/                   # Phase 1.5, 2, 4 position management & execution
   reporting/                # Phase 5 notifications
   reflection/               # Phase 6 post-trade learning
