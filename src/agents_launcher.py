@@ -521,15 +521,20 @@ AGENT_TEAMS_PROMPT = """
 - **Lead 直接執行** = 極簡操作，Lead 直接呼叫 Python 函數
 - Agent spec 是自包含的，包含執行方式、輸入參數、輸出格式，可直接作為 Task tool prompt
 
+## Model 分級（節省 Token 成本）
+- **Tier 1 (Haiku)**: 純程式碼執行 subagent → `model="haiku"`
+- **Tier 2 (Sonnet)**: 結構化論述 teammate → `model="sonnet"`
+- **Tier 3 (Opus)**: 深度推理判決 teammate → 不指定 model（使用預設 Opus）
+
 ---
 
 ## Phase 0 (Symbol Discovery, 如果 watchlist_mode == "dynamic")
-**[Subagent]** 讀取 `agents/analysts/symbol_screener.md` 完整內容，用 Task tool spawn 執行。
+**[Subagent, model="haiku"]** 讀取 `agents/analysts/symbol_screener.md` 完整內容，用 Task tool spawn 執行。使用 `model="haiku"`。
 
 ---
 
 ## Phase 1 (Parallel Data Collection, 等 Phase 0 完成)
-**[3 個並行 Subagent]** 用 Task tool 同時 spawn 以下 3 個 subagents：
+**[3 個並行 Subagent, model="haiku"]** 用 Task tool 同時 spawn 以下 3 個 subagents，全部使用 `model="haiku"`：
 1. **market-data** → 讀取 `agents/analysts/market_analyst.md` 完整內容作為 prompt
 2. **tech-signals** → 讀取 `agents/analysts/technical_analyst.md` 完整內容作為 prompt
 3. **sentiment** → 讀取 `agents/analysts/sentiment_analyst.md` 完整內容作為 prompt
@@ -537,7 +542,7 @@ AGENT_TEAMS_PROMPT = """
 ---
 
 ## Phase 1.5 (Position Exit Review, 等 Phase 1 全部完成)
-**[Subagent]** 讀取 `agents/trader/position_reviewer.md` 完整內容，用 Task tool spawn 執行。
+**[Subagent, model="haiku"]** 讀取 `agents/trader/position_reviewer.md` 完整內容，用 Task tool spawn 執行。使用 `model="haiku"`。
 
 ---
 
@@ -559,7 +564,7 @@ candidates = task_generate_decisions(tech, sent, market)
 
 ## Phase 2.5 (Fundamentals + Investment Debate, 取 Top-N 候選)
 
-**[Subagent]** 取得基本面資料：讀取 `agents/analysts/fundamentals_analyst.md`，附加輸入參數 `symbols = Top-N 候選標的列表`。
+**[Subagent, model="haiku"]** 取得基本面資料：讀取 `agents/analysts/fundamentals_analyst.md`，附加輸入參數 `symbols = Top-N 候選標的列表`。使用 `model="haiku"`。
 
 **[Lead]** 準備辯論上下文：
 ```python
@@ -571,9 +576,9 @@ for symbol in top_symbols:
 ### 投資辯論（對每個 Top-N 候選，可並行）
 **[Teammates]** 對每個候選 symbol，依序 spawn 以下 teammates：
 
-- **bull-researcher-{symbol}** → 讀取 `agents/researchers/bull_researcher.md` + `shared_state/debate_context_{symbol}.json`
-- **bear-researcher-{symbol}** (等 bull 完成) → 讀取 `agents/researchers/bear_researcher.md` + bull 論點
-- **research-judge-{symbol}** (等 bear 完成) → 讀取 `agents/researchers/research_judge.md` + 完整辯論紀錄
+- **bull-researcher-{symbol}** (model="sonnet") → 讀取 `agents/researchers/bull_researcher.md` + `shared_state/debate_context_{symbol}.json`。使用 `model="sonnet"`。
+- **bear-researcher-{symbol}** (等 bull 完成, model="sonnet") → 讀取 `agents/researchers/bear_researcher.md` + bull 論點。使用 `model="sonnet"`。
+- **research-judge-{symbol}** (等 bear 完成, Opus 預設) → 讀取 `agents/researchers/research_judge.md` + 完整辯論紀錄。不指定 model，使用預設 Opus。
   → 裁決 BUY/SELL/HOLD + score_adjustment (-0.5 ~ +0.5)
 
 **[Lead]** 合併辯論結果：
@@ -585,7 +590,7 @@ candidates = task_merge_debates(candidates)
 ---
 
 ## Phase 3 (Risk Manager 硬性規則, 等 Phase 2.5 完成)
-**[Subagent]** 讀取 `agents/risk_mgmt/risk_manager.md`，附加輸入參數 `candidates = Decision Engine 的候選列表` 到 prompt 末尾，用 Task tool spawn 執行。
+**[Subagent, model="haiku"]** 讀取 `agents/risk_mgmt/risk_manager.md`，附加輸入參數 `candidates = Decision Engine 的候選列表` 到 prompt 末尾，用 Task tool spawn 執行。使用 `model="haiku"`。
 
 ---
 
@@ -600,10 +605,10 @@ for trade in approved:
 
 ### 風控辯論（對每筆 approved 交易，可並行）
 **[Teammates]** 依序 spawn：
-- **aggressive-analyst-{symbol}** → 讀取 `agents/risk_mgmt/aggressive_analyst.md`
-- **conservative-analyst-{symbol}** (等 aggressive 完成) → 讀取 `agents/risk_mgmt/conservative_analyst.md`
-- **neutral-analyst-{symbol}** (等 conservative 完成) → 讀取 `agents/risk_mgmt/neutral_analyst.md`
-- **risk-judge-{symbol}** (等 neutral 完成) → 讀取 `agents/risk_mgmt/risk_judge.md`
+- **aggressive-analyst-{symbol}** (model="sonnet") → 讀取 `agents/risk_mgmt/aggressive_analyst.md`。使用 `model="sonnet"`。
+- **conservative-analyst-{symbol}** (等 aggressive 完成, model="sonnet") → 讀取 `agents/risk_mgmt/conservative_analyst.md`。使用 `model="sonnet"`。
+- **neutral-analyst-{symbol}** (等 conservative 完成, model="sonnet") → 讀取 `agents/risk_mgmt/neutral_analyst.md`。使用 `model="sonnet"`。
+- **risk-judge-{symbol}** (等 neutral 完成, Opus 預設) → 讀取 `agents/risk_mgmt/risk_judge.md`。不指定 model，使用預設 Opus。
   → 裁決 qty_ratio (0.5~1.0) + 調整 stop_loss / take_profit
 
 **[Lead]** 合併風控辯論結果：
@@ -615,12 +620,12 @@ approved = task_merge_risk_debates(approved)
 ---
 
 ## Phase 4 (Execution, 等 Phase 3.5 完成)
-**[Subagent]** 讀取 `agents/trader/executor.md`，附加輸入參數 `assessed = 風控評估後的交易列表` 到 prompt 末尾，用 Task tool spawn 執行。
+**[Subagent, model="haiku"]** 讀取 `agents/trader/executor.md`，附加輸入參數 `assessed = 風控評估後的交易列表` 到 prompt 末尾，用 Task tool spawn 執行。使用 `model="haiku"`。
 
 ---
 
 ## Phase 5 (Report)
-**[Subagent]** 讀取 `agents/reporting/reporter.md` 完整內容，用 Task tool spawn 執行。
+**[Subagent, model="haiku"]** 讀取 `agents/reporting/reporter.md` 完整內容，用 Task tool spawn 執行。使用 `model="haiku"`。
 
 ---
 
@@ -635,7 +640,7 @@ for trade_record in unreflected:
 ```
 
 **[Teammates]** 對每筆需反思的交易 spawn：
-- **reflection-analyst-{trade_id}** → 讀取 `agents/reflection/reflection_analyst.md` + `shared_state/reflection_context_{trade_id}.json`
+- **reflection-analyst-{trade_id}** (Opus 預設) → 讀取 `agents/reflection/reflection_analyst.md` + `shared_state/reflection_context_{trade_id}.json`。不指定 model，使用預設 Opus。
 
 **[Lead]** 儲存反思結果到記憶庫：
 ```python
