@@ -66,15 +66,54 @@ class SymbolScreener:
             return self._bars_getter(symbol, asset_type, lookback_days=self.lookback_days)
         return self.client.get_stock_bars(symbol, "1Day", lookback_days=self.lookback_days)
 
+    # ──────────────────────────────────────────────
+    # Dynamic market-wide discovery via Alpaca Screener API
+    # ──────────────────────────────────────────────
+
+    def _discover_dynamic_symbols(self) -> set[str]:
+        """Discover trending symbols from the broader market."""
+        symbols: set[str] = set()
+        top = self.screener_cfg.get("discovery_top", 20)
+
+        try:
+            actives = self.client.get_most_active_stocks(top=top)
+            symbols.update(item["symbol"] for item in actives)
+        except Exception:
+            pass
+
+        try:
+            movers = self.client.get_market_movers(top=top)
+            symbols.update(item["symbol"] for item in movers.get("gainers", []))
+            symbols.update(item["symbol"] for item in movers.get("losers", []))
+        except Exception:
+            pass
+
+        return symbols
+
     def screen_stocks(self) -> list[dict]:
         """
         Screen the stock universe and return top candidates ranked by a
         composite activity score (volume surge + momentum + volatility).
+
+        When discovery_enabled is true, the static universe is merged with
+        dynamically discovered symbols from Alpaca's screener API.
         """
-        print(f"\n  Screening {len(self._stock_universe)} stocks...")
+        universe = set(self._stock_universe)
+        self._dynamic_count = 0
+
+        if self.screener_cfg.get("discovery_enabled", True):
+            dynamic = self._discover_dynamic_symbols()
+            new_symbols = dynamic - universe
+            self._dynamic_count = len(dynamic)
+            if dynamic:
+                print(f"\n  🔍 Dynamic discovery: {len(dynamic)} symbols "
+                      f"({len(new_symbols)} new outside static universe)")
+            universe = universe | dynamic
+
+        print(f"  Screening {len(universe)} total symbols...")
         results = []
 
-        for symbol in self._stock_universe:
+        for symbol in universe:
             try:
                 bars = self._get_bars(symbol, "stock")
                 if bars is None or len(bars) < 10:
@@ -136,6 +175,8 @@ class SymbolScreener:
             "timestamp": datetime.now().isoformat(),
             "screened_from": {
                 "stock_universe": len(self._stock_universe),
+                "dynamic_discovered": getattr(self, "_dynamic_count", 0),
+                "total_screened": len(self._stock_universe) + getattr(self, "_dynamic_count", 0),
             },
         }
 
