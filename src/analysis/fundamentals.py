@@ -4,10 +4,19 @@ Fetches company financial data via yfinance for debate context.
 
 This module does NOT produce a composite score — it generates human-readable
 summaries that Claude Agent Team debate participants use as context.
+
+Rate-limit handling:
+  - 2s delay between consecutive API calls
+  - Exponential backoff retry (up to 3 attempts) on failures
+  - Daily disk cache in shared_state to avoid redundant calls
 """
 
+import json
+import time
 from dataclasses import dataclass, asdict
 from typing import Optional
+
+from src.state_dir import get_state_dir
 
 # yfinance is an optional dependency; only needed when Agent Teams debates are active.
 try:
@@ -15,6 +24,11 @@ try:
     _HAS_YFINANCE = True
 except ImportError:
     _HAS_YFINANCE = False
+
+_REQUEST_DELAY = 2.0       # seconds between API calls
+_MAX_RETRIES = 3           # retry attempts per symbol
+_BACKOFF_BASE = 3.0        # base seconds for exponential backoff
+_CACHE_FILENAME = "fundamentals_cache.json"
 
 
 
@@ -52,23 +66,68 @@ def _format_large_number(n: Optional[float]) -> str:
 
 
 class FundamentalsAnalyzer:
-    """Fetches fundamental data from yfinance."""
+    """Fetches fundamental data from yfinance with rate-limit handling and daily cache."""
 
-    def analyze(self, symbol: str) -> Optional[FundamentalSignal]:
-        """Fetch fundamental data for a single symbol.
+    def __init__(self):
+        self._cache: dict[str, dict] = {}
+        self._cache_loaded = False
 
-        Returns None if yfinance is unavailable.
-        """
-        if not _HAS_YFINANCE:
-            return None
+    # ── Daily disk cache ──────────────────────────────────
 
+    def _cache_path(self):
+        return get_state_dir() / _CACHE_FILENAME
+
+    def _load_cache(self):
+        """Load today's cache from disk (once per instance)."""
+        if self._cache_loaded:
+            return
+        self._cache_loaded = True
+        path = self._cache_path()
+        if path.exists():
+            try:
+                self._cache = json.loads(path.read_text())
+            except (json.JSONDecodeError, OSError):
+                self._cache = {}
+
+    def _save_cache(self):
+        """Persist cache to disk."""
         try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info or {}
-        except Exception as e:
-            print(f"    ⚠️  Fundamentals fetch failed for {symbol}: {e}")
-            return None
+            self._cache_path().write_text(json.dumps(self._cache, default=str))
+        except OSError:
+            pass
 
+    def _cache_get(self, symbol: str) -> Optional[dict]:
+        self._load_cache()
+        return self._cache.get(symbol)
+
+    def _cache_put(self, symbol: str, info: dict):
+        self._cache[symbol] = info
+        self._save_cache()
+
+    # ── yfinance fetch with retry ─────────────────────────
+
+    def _fetch_info(self, symbol: str) -> Optional[dict]:
+        """Fetch ticker.info with exponential backoff retry."""
+        for attempt in range(_MAX_RETRIES):
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info or {}
+                if info:
+                    return info
+            except Exception as e:
+                wait = _BACKOFF_BASE * (2 ** attempt)
+                print(f"    ⚠️  Fundamentals fetch failed for {symbol} "
+                      f"(attempt {attempt + 1}/{_MAX_RETRIES}): {e}")
+                if attempt < _MAX_RETRIES - 1:
+                    print(f"    ⏳ Retrying in {wait:.0f}s …")
+                    time.sleep(wait)
+        return None
+
+    # ── Core analysis ─────────────────────────────────────
+
+    @staticmethod
+    def _build_signal(symbol: str, info: dict) -> FundamentalSignal:
+        """Build a FundamentalSignal from a yfinance info dict."""
         pe = info.get("trailingPE")
         fwd_pe = info.get("forwardPE")
         pb = info.get("priceToBook")
@@ -80,15 +139,12 @@ class FundamentalsAnalyzer:
         sector = info.get("sector", "unknown")
         industry = info.get("industry", "unknown")
 
-        # Build human-readable summary for debate agents
         parts = [f"{symbol} ({sector} / {industry})"]
-
         if pe is not None:
             parts.append(f"P/E: {pe:.1f}" + (f" (Fwd: {fwd_pe:.1f})" if fwd_pe else ""))
         if pb is not None:
             parts.append(f"P/B: {pb:.2f}")
         if de is not None:
-            # yfinance returns D/E as percentage (e.g. 150 means 1.5x)
             parts.append(f"D/E: {de:.0f}%")
         if rev_growth is not None:
             parts.append(f"Revenue Growth: {rev_growth*100:+.1f}%")
@@ -99,27 +155,45 @@ class FundamentalsAnalyzer:
         if mcap is not None:
             parts.append(f"Market Cap: {_format_large_number(mcap)}")
 
-        summary = " | ".join(parts)
-
         return FundamentalSignal(
-            symbol=symbol,
-            pe_ratio=pe,
-            forward_pe=fwd_pe,
-            pb_ratio=pb,
-            debt_to_equity=de,
-            revenue_growth=rev_growth,
-            earnings_growth=earn_growth,
-            free_cash_flow=fcf,
-            market_cap=mcap,
-            sector=sector,
-            industry=industry,
-            summary=summary,
+            symbol=symbol, pe_ratio=pe, forward_pe=fwd_pe, pb_ratio=pb,
+            debt_to_equity=de, revenue_growth=rev_growth,
+            earnings_growth=earn_growth, free_cash_flow=fcf,
+            market_cap=mcap, sector=sector, industry=industry,
+            summary=" | ".join(parts),
         )
 
+    def analyze(self, symbol: str) -> Optional[FundamentalSignal]:
+        """Fetch fundamental data for a single symbol.
+
+        Returns None if yfinance is unavailable.
+        """
+        if not _HAS_YFINANCE:
+            return None
+
+        # Check daily cache first
+        cached = self._cache_get(symbol)
+        if cached:
+            print(f"    💾 {symbol}: using cached fundamentals")
+            return self._build_signal(symbol, cached)
+
+        info = self._fetch_info(symbol)
+        if info is None:
+            return None
+
+        self._cache_put(symbol, info)
+        return self._build_signal(symbol, info)
+
     def analyze_batch(self, symbols: list[str]) -> dict[str, Optional[FundamentalSignal]]:
-        """Fetch fundamental data for multiple symbols."""
+        """Fetch fundamental data for multiple symbols with rate limiting."""
         results = {}
-        for symbol in symbols:
+        for i, symbol in enumerate(symbols):
+            # Rate-limit delay between API calls (skip for cached / first request)
+            needs_api = self._cache_get(symbol) is None
+            if needs_api and i > 0:
+                print(f"    ⏳ Rate-limit delay ({_REQUEST_DELAY}s) …")
+                time.sleep(_REQUEST_DELAY)
+
             signal = self.analyze(symbol)
             results[symbol] = signal
             if signal:
