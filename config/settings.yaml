@@ -52,6 +52,8 @@ screener:
   max_price: 1000.0           # Maximum stock price ($)
   min_avg_volume: 500000      # Minimum 20-day average volume
   lookback_days: 20           # Days of data for screening metrics
+  discovery_enabled: true      # Enable dynamic market-wide discovery via Alpaca Screener API
+  discovery_top: 20            # How many symbols to request from each screener endpoint
 
 # Scoring weights for signal aggregation
 scoring:

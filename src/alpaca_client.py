@@ -154,6 +154,50 @@ class AlpacaClient:
         order = self.trading_client.submit_order(request)
         return {"id": str(order.id), "status": order.status.value}
 
+    # ──────────────────────────────────────────────
+    # Market Screener (dynamic discovery)
+    # ──────────────────────────────────────────────
+
+    def get_most_active_stocks(self, top: int = 20) -> list[dict]:
+        """Fetch the most active stocks market-wide by volume."""
+        from alpaca.data.historical.screener import ScreenerClient
+        from alpaca.data.requests import MostActivesRequest
+
+        try:
+            client = ScreenerClient(self._api_key, self._api_secret)
+            result = client.get_most_actives(MostActivesRequest(top=top))
+            return [
+                {"symbol": s.symbol, "volume": s.volume, "trade_count": s.trade_count}
+                for s in result.most_actives
+            ]
+        except Exception as e:
+            print(f"  ⚠️  Most-actives fetch failed: {e}")
+            return []
+
+    def get_market_movers(self, top: int = 20) -> dict:
+        """Fetch top gainers and losers market-wide."""
+        from alpaca.data.historical.screener import ScreenerClient
+        from alpaca.data.requests import MarketMoversRequest
+
+        try:
+            client = ScreenerClient(self._api_key, self._api_secret)
+            result = client.get_market_movers(MarketMoversRequest(top=top))
+            fmt = lambda m: {
+                "symbol": m.symbol, "percent_change": m.percent_change,
+                "change": m.change, "price": m.price,
+            }
+            return {
+                "gainers": [fmt(m) for m in result.gainers],
+                "losers": [fmt(m) for m in result.losers],
+            }
+        except Exception as e:
+            print(f"  ⚠️  Market-movers fetch failed: {e}")
+            return {"gainers": [], "losers": []}
+
+    # ──────────────────────────────────────────────
+    # Order Placement
+    # ──────────────────────────────────────────────
+
     def place_bracket_order(
         self,
         symbol: str,
