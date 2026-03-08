@@ -68,6 +68,11 @@ decision:
   min_score_to_sell: 0.5
   require_human_confirm: false
 
+# Market regime detection settings
+regime:
+  vix_force_risk_off: 35        # VIX threshold to force risk_off regime
+  cross_asset_symbols: [TLT, UUP]  # Cross-asset trend confirmation (VIX via yfinance ^VIX)
+
 # Risk management constraints
 risk:
   max_position_pct: 10        # Max single position as % of portfolio
@@ -77,6 +82,8 @@ risk:
   kill_switch_pct: 3          # Kill switch trigger %
   max_drawdown_pct: 10        # Max drawdown from peak %
   min_risk_reward: 1.5        # Minimum risk-reward ratio
+  max_sector_pct: 30          # Max single sector as % of portfolio
+  max_same_sector_same_direction: 3  # Max positions in same sector & direction
 
 # Position exit review settings
 position_exit:

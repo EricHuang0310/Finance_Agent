@@ -64,7 +64,13 @@ def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
             mkt_data = json.load(f)
         mkt_sym = mkt_data.get("stocks", {}).get(symbol, {})
         context["market_data"] = mkt_sym
-        context["market_regime"] = mkt_data.get("market_regime", "neutral")
+        regime_data = mkt_data.get("market_regime", {})
+        if isinstance(regime_data, dict):
+            context["market_regime"] = regime_data.get("regime", "transitional")
+            context["regime_confidence"] = regime_data.get("regime_confidence", 0.5)
+        else:
+            context["market_regime"] = regime_data if regime_data else "transitional"
+            context["regime_confidence"] = 0.5
 
     # Load fundamentals (if available)
     fund_path = STATE_DIR / "fundamentals_signals.json"
@@ -153,7 +159,7 @@ def _build_situation_text(context: dict) -> str:
     if fund:
         parts.append(f"Fundamentals: {fund.get('summary', 'N/A')}")
 
-    regime = context.get("market_regime", "neutral")
+    regime = context.get("market_regime", "transitional")
     parts.append(f"Regime: {regime}")
 
     return " | ".join(parts) if parts else "No data available"

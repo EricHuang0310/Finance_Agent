@@ -13,6 +13,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -26,6 +27,15 @@ from src.analysis.fundamentals import FundamentalsAnalyzer
 from src.risk.manager import RiskManager
 from src.notifications.telegram import TelegramNotifier
 from src.memory.situation_memory import SituationMemory
+
+# yfinance for VIX data (optional, already used by fundamentals)
+try:
+    import yfinance as yf
+    _HAS_YFINANCE = True
+except ImportError:
+    _HAS_YFINANCE = False
+
+ET = ZoneInfo("America/New_York")
 
 
 class TradingOrchestrator:
@@ -84,6 +94,7 @@ class TradingOrchestrator:
         self.watchlist_stocks = self.config.get("watchlist", {}).get("stocks", [])
         self.weights = self.config.get("scoring", {})
         self.decision_cfg = self.config.get("decision", {})
+        self.regime_cfg = self.config.get("regime", {})
 
     # ══════════════════════════════════════════════
     # Agent 0: Symbol Screener (Phase 0)
@@ -161,39 +172,122 @@ class TradingOrchestrator:
             except Exception as e:
                 print(f"  ❌ {symbol}: Error - {e}")
 
-        # Detect market regime and include in market data
-        market_data["market_regime"] = self._detect_market_regime()
-        print(f"\n  📈 Market Regime: {market_data['market_regime']}")
+        # Detect market regime and include in market data (now returns dict)
+        regime_result = self._detect_market_regime()
+        market_data["market_regime"] = regime_result
+        print(f"\n  📈 Market Regime: {regime_result['regime']} (confidence: {regime_result['regime_confidence']:.2f})")
 
         # Save to shared state
         self._save_state("market_overview.json", market_data)
         return market_data
 
-    def _detect_market_regime(self) -> str:
-        """Determine market regime (risk_on / risk_off / neutral) using SPY EMA alignment."""
+    def _detect_market_regime(self) -> dict:
+        """Determine market regime using SPY EMA alignment, VIX, and cross-asset signals.
+
+        Returns dict with 'regime' (risk_on/risk_off/transitional) and 'regime_confidence' (0-1).
+        """
         try:
             spy_bars = self._get_bars("SPY", "stock", lookback_days=250)
             if spy_bars is None or len(spy_bars) < 200:
-                return "neutral"
+                return {"regime": "transitional", "regime_confidence": 0.5}
 
             close = spy_bars["close"].astype(float)
             ema20 = float(close.ewm(span=20, adjust=False).mean().iloc[-1])
             ema50 = float(close.ewm(span=50, adjust=False).mean().iloc[-1])
             ema200 = float(close.ewm(span=200, adjust=False).mean().iloc[-1])
 
+            # SPY EMA alignment (primary signal)
             if ema20 > ema50 > ema200:
-                return "risk_on"
+                spy_regime = "risk_on"
+                spy_confidence = 1.0
             elif ema20 < ema50 < ema200:
-                return "risk_off"
-            return "neutral"
+                spy_regime = "risk_off"
+                spy_confidence = 1.0
+            else:
+                spy_regime = "transitional"
+                spy_confidence = 0.5
+
+            # VIX check via yfinance
+            vix_force_threshold = self.regime_cfg.get("vix_force_risk_off", 35)
+            vix_agrees = None  # None = no data, True/False = agrees with regime
+            vix_value = None
+            if _HAS_YFINANCE:
+                try:
+                    vix_ticker = yf.Ticker("^VIX")
+                    vix_hist = vix_ticker.history(period="5d")
+                    if vix_hist is not None and len(vix_hist) > 0:
+                        vix_value = float(vix_hist["Close"].iloc[-1])
+                        # Force risk_off if VIX extremely high
+                        if vix_value > vix_force_threshold:
+                            return {"regime": "risk_off", "regime_confidence": 1.0,
+                                    "vix": vix_value, "vix_forced": True}
+                        # VIX agreement check
+                        if spy_regime == "risk_on" and vix_value < 20:
+                            vix_agrees = True
+                        elif spy_regime == "risk_off" and vix_value > 25:
+                            vix_agrees = True
+                        elif spy_regime == "risk_on" and vix_value > 25:
+                            vix_agrees = False
+                        elif spy_regime == "risk_off" and vix_value < 20:
+                            vix_agrees = False
+                except Exception:
+                    pass
+
+            # Cross-asset scanning (TLT, UUP)
+            cross_symbols = self.regime_cfg.get("cross_asset_symbols", ["TLT", "UUP"])
+            cross_agrees_count = 0
+            cross_total = 0
+            for cs in cross_symbols:
+                try:
+                    cs_bars = self._get_bars(cs, "stock", lookback_days=60)
+                    if cs_bars is not None and len(cs_bars) >= 20:
+                        cs_close = cs_bars["close"].astype(float)
+                        cs_ema20 = float(cs_close.ewm(span=20, adjust=False).mean().iloc[-1])
+                        cs_latest = float(cs_close.iloc[-1])
+                        cross_total += 1
+                        # TLT rising = bonds up = risk_off environment
+                        # UUP rising = dollar strong = risk_off environment
+                        cs_trend_up = cs_latest > cs_ema20
+                        if spy_regime == "risk_off" and cs_trend_up:
+                            cross_agrees_count += 1
+                        elif spy_regime == "risk_on" and not cs_trend_up:
+                            cross_agrees_count += 1
+                        elif spy_regime == "transitional":
+                            cross_agrees_count += 0.5
+                except Exception:
+                    pass
+
+            # Compute regime_confidence: SPY alignment (60%) + VIX/cross-asset agreement (40%)
+            agreement_score = 0.0
+            agreement_sources = 0
+            if vix_agrees is not None:
+                agreement_score += 1.0 if vix_agrees else 0.0
+                agreement_sources += 1
+            if cross_total > 0:
+                agreement_score += cross_agrees_count / cross_total
+                agreement_sources += 1
+
+            if agreement_sources > 0:
+                agreement_pct = agreement_score / agreement_sources
+            else:
+                agreement_pct = 0.5  # No cross-asset data = neutral
+
+            regime_confidence = spy_confidence * 0.6 + agreement_pct * 0.4
+            regime_confidence = max(0.1, min(1.0, regime_confidence))
+
+            result = {
+                "regime": spy_regime,
+                "regime_confidence": round(regime_confidence, 4),
+            }
+            if vix_value is not None:
+                result["vix"] = round(vix_value, 2)
+            return result
+
         except Exception:
-            return "neutral"
+            return {"regime": "transitional", "regime_confidence": 0.5}
 
     def _get_regime_weights(self, regime: str) -> dict:
-        """Return scoring weights adjusted for the current market regime.
-
-        Implements the regime adjustment specified in decision_engine.md.
-        """
+        """Return scoring weights adjusted for the current market regime."""
         base_tech = self.weights.get("technical_analyst", 0.35)
         base_mkt = self.weights.get("market_analyst", 0.20)
         base_sent = self.weights.get("sentiment_analyst", 0.15)
@@ -202,7 +296,9 @@ class TradingOrchestrator:
             return {"tech": base_tech * 1.2, "market": base_mkt * 0.8, "sentiment": base_sent * 1.1}
         elif regime == "risk_off":
             return {"tech": base_tech, "market": base_mkt * 1.3, "sentiment": base_sent}
-        return {"tech": base_tech, "market": base_mkt, "sentiment": base_sent}
+        elif regime == "transitional":
+            return {"tech": base_tech * 0.9, "market": base_mkt * 0.9, "sentiment": base_sent * 0.9}
+        return {"tech": base_tech * 0.9, "market": base_mkt * 0.9, "sentiment": base_sent * 0.9}
 
     # ══════════════════════════════════════════════
     # Fundamentals Analyst (Phase 2.5 — Top-N only)
@@ -246,7 +342,7 @@ class TradingOrchestrator:
                     signals["stocks"][symbol] = signal.to_dict()
                     emoji = "🟢" if signal.score > 0.3 else "🔴" if signal.score < -0.3 else "🟡"
                     print(f"  {emoji} {symbol}: score={signal.score:.3f} | "
-                          f"trend={signal.trend} | RSI={signal.rsi:.1f}")
+                          f"trend={signal.trend} | RSI={signal.rsi:.1f} | ADX={signal.adx:.1f}")
                 else:
                     print(f"  ⚠️  {symbol}: Insufficient data for analysis")
             except Exception as e:
@@ -280,7 +376,8 @@ class TradingOrchestrator:
     # Agent 3.5: Position Exit Review
     # ══════════════════════════════════════════════
 
-    def run_position_exit_review(self, tech_signals: dict, market_data: dict) -> list[dict]:
+    def run_position_exit_review(self, tech_signals: dict, market_data: dict,
+                                  sentiment: dict = None) -> list[dict]:
         """Review existing positions for exit signals."""
         print("\n" + "=" * 60)
         print("🔄 AGENT 3.5: Position Exit Review")
@@ -301,6 +398,7 @@ class TradingOrchestrator:
             tech_signals=tech_signals,
             market_data=market_data,
             bars_getter=bars_getter,
+            sentiment_data=sentiment,
         )
 
         exits = [r for r in results if r.exit_action == "close"]
@@ -309,7 +407,8 @@ class TradingOrchestrator:
         for r in results:
             if r.exit_action == "close":
                 roi_pct = r.unrealized_plpc * 100
-                print(f"  📤 {r.symbol} ({r.side}): EXIT score={r.exit_score:.3f} | "
+                urgency = f" [{r.exit_urgency}]" if hasattr(r, 'exit_urgency') else ""
+                print(f"  📤 {r.symbol} ({r.side}): EXIT score={r.exit_score:.3f}{urgency} | "
                       f"P&L={roi_pct:+.2f}% | {r.exit_reason}")
             else:
                 print(f"  ✅ {r.symbol} ({r.side}): HOLD score={r.exit_score:.3f}")
@@ -412,6 +511,8 @@ class TradingOrchestrator:
               f"{summary['max_exposure_pct']:.0f}%")
         print(f"  📈 Daily P&L: {summary['daily_pnl_pct']:+.2f}% | "
               f"Positions: {summary['position_count']}/{summary['max_positions']}")
+        if summary.get("sector_exposure"):
+            print(f"  🏭 Sector exposure: {summary['sector_exposure']}")
 
         if summary["kill_switch_active"]:
             print("  🚨 KILL SWITCH IS ACTIVE - NO TRADES ALLOWED")
@@ -431,6 +532,10 @@ class TradingOrchestrator:
                 stop_loss_price=candidate.get("stop_loss"),
                 take_profit_price=candidate.get("take_profit"),
                 signal_score=candidate.get("composite_score", 0),
+                catalyst_flag=candidate.get("catalyst_flag"),
+                regime_conflict=candidate.get("regime_conflict", False),
+                atr_pct=candidate.get("atr_pct", 0),
+                sector=candidate.get("sector", "unknown"),
             )
 
             candidate["risk_assessment"] = assessment.to_dict()
@@ -458,11 +563,6 @@ class TradingOrchestrator:
         Aggregate signals from all agents and generate trade candidates.
 
         Uses market regime-adjusted weights and confidence-weighted scoring.
-        Scoring weights (from config, adjusted by regime):
-        - Technical: 35% base
-        - Market (trend context): 20% base
-        - Sentiment: 15% base
-        - Risk: 30% (veto power, not in scoring)
         """
         print("\n" + "=" * 60)
         print("🧠 Decision Engine - Aggregating Signals")
@@ -471,20 +571,63 @@ class TradingOrchestrator:
         min_buy = self.decision_cfg.get("min_score_to_buy", 0.3)
         min_sell = self.decision_cfg.get("min_score_to_sell", min_buy)
         candidates = []
+        skipped_symbols = {}
 
-        # Get regime-adjusted weights
-        regime = "neutral"
+        # Get regime info
+        regime = "transitional"
+        regime_confidence = 0.5
         if market_data:
-            regime = market_data.get("market_regime", "neutral")
+            regime_data = market_data.get("market_regime", {})
+            if isinstance(regime_data, dict):
+                regime = regime_data.get("regime", "transitional")
+                regime_confidence = regime_data.get("regime_confidence", 0.5)
+            else:
+                # Backward compatibility
+                regime = regime_data if regime_data else "transitional"
+                regime_confidence = 0.5
+
         rw = self._get_regime_weights(regime)
-        print(f"  📈 Regime: {regime} → weights: tech={rw['tech']:.3f} mkt={rw['market']:.3f} sent={rw['sentiment']:.3f}")
+        print(f"  📈 Regime: {regime} (conf={regime_confidence:.2f}) → weights: tech={rw['tech']:.3f} mkt={rw['market']:.3f} sent={rw['sentiment']:.3f}")
+
+        # Regime-adjusted thresholds
+        effective_min_buy = min_buy
+        effective_min_sell = min_sell
+        if regime == "transitional":
+            effective_min_buy = min_buy + 0.1
+            effective_min_sell = min_sell + 0.1
+        elif regime == "risk_off":
+            effective_min_buy = max(min_buy, 0.6)
 
         def _score_symbol(symbol, signal, sent_data, mkt_score, asset_type):
             tech_score = signal.get("score", 0)
             tech_conf = signal.get("confidence", 1.0)
             sent_score = sent_data.get("score", 0) if sent_data else 0
             sent_conf = sent_data.get("confidence", 1.0) if sent_data else 0.2
-            mkt_conf = 1.0  # Market score is always based on full bar data
+            mkt_conf = regime_confidence
+
+            # Signal conflict detection
+            tech_dir = "bullish" if tech_score > 0.1 else "bearish" if tech_score < -0.1 else "neutral"
+            sent_dir = "bullish" if sent_score > 0.1 else "bearish" if sent_score < -0.1 else "neutral"
+            mkt_dir = "bullish" if mkt_score > 0.1 else "bearish" if mkt_score < -0.1 else "neutral"
+
+            directions = [d for d in [tech_dir, sent_dir, mkt_dir] if d != "neutral"]
+            if not directions:
+                signal_alignment = "all_aligned"
+            elif len(set(directions)) == 1:
+                signal_alignment = "all_aligned"
+            elif tech_dir != "neutral" and sent_dir != "neutral" and tech_dir != sent_dir:
+                signal_alignment = "partial_conflict"
+            else:
+                signal_alignment = "partial_conflict"
+
+            # Check regime conflict
+            regime_conflict = False
+            if regime == "risk_off" and tech_dir == "bullish":
+                regime_conflict = True
+                signal_alignment = "regime_conflict"
+            elif regime == "risk_on" and tech_dir == "bearish":
+                regime_conflict = True
+                signal_alignment = "regime_conflict"
 
             # Confidence-weighted composite (regime-adjusted weights)
             weighted_tech = tech_score * rw["tech"] * tech_conf
@@ -493,12 +636,48 @@ class TradingOrchestrator:
             total_weight = rw["tech"] * tech_conf + rw["market"] * mkt_conf + rw["sentiment"] * sent_conf
 
             composite = (weighted_tech + weighted_mkt + weighted_sent) / total_weight if total_weight > 0 else 0
+
+            # Signal alignment bonus/penalty
+            if signal_alignment == "all_aligned":
+                composite *= 1.05
+            elif signal_alignment == "partial_conflict" and tech_dir != sent_dir and tech_dir != "neutral" and sent_dir != "neutral":
+                composite *= 0.90
+
             composite = max(-1.0, min(1.0, composite))
 
-            if composite >= min_buy or composite <= -min_sell:
-                side = "buy" if composite >= min_buy else "sell"
+            # Catalyst detection from sentiment
+            catalyst_flag = None
+            upcoming_earnings = sent_data.get("upcoming_earnings", False) if sent_data else False
+            binary_event = sent_data.get("binary_event", False) if sent_data else False
+            if upcoming_earnings:
+                catalyst_flag = "earnings_imminent"
+            elif binary_event:
+                catalyst_flag = "binary_event"
+
+            # Get sector from fundamentals cache if available
+            sector = "unknown"
+            try:
+                fund_path = self.state_dir / "fundamentals_signals.json"
+                if fund_path.exists():
+                    import json as _json
+                    with open(fund_path) as _f:
+                        fund_data = _json.load(_f)
+                    sym_fund = fund_data.get("signals", {}).get(symbol)
+                    if sym_fund:
+                        sector = sym_fund.get("sector", "unknown")
+            except Exception:
+                pass
+
+            # ATR percentage for risk manager
+            atr_pct = 0.0
+            if signal.get("atr") and signal.get("entry_price") and signal["entry_price"] > 0:
+                atr_pct = signal["atr"] / signal["entry_price"]
+
+            if composite >= effective_min_buy or composite <= -effective_min_sell:
+                side = "buy" if composite >= effective_min_buy else "sell"
                 emoji = "🟢" if side == "buy" else "🔴"
-                print(f"  {emoji} {symbol}: composite={composite:.3f} (conf: tech={tech_conf:.2f} sent={sent_conf:.2f}) → {side.upper()} CANDIDATE")
+                print(f"  {emoji} {symbol}: composite={composite:.3f} (conf: tech={tech_conf:.2f} sent={sent_conf:.2f} "
+                      f"align={signal_alignment}) → {side.upper()} CANDIDATE")
                 return {
                     "symbol": symbol,
                     "asset_type": asset_type,
@@ -514,8 +693,15 @@ class TradingOrchestrator:
                     "take_profit": signal.get("take_profit"),
                     "trend": signal.get("trend"),
                     "rsi": signal.get("rsi"),
+                    "signal_alignment": signal_alignment,
+                    "regime_conflict": regime_conflict,
+                    "catalyst_flag": catalyst_flag,
+                    "regime_confidence": regime_confidence,
+                    "sector": sector,
+                    "atr_pct": round(atr_pct, 4),
                 }
             else:
+                skipped_symbols[symbol] = f"composite={composite:.3f} below threshold"
                 print(f"  ⏭️  {symbol}: composite={composite:.3f} → Skip")
                 return None
 
@@ -535,8 +721,10 @@ class TradingOrchestrator:
         self._save_state("decisions.json", {
             "timestamp": datetime.now().isoformat(),
             "market_regime": regime,
+            "regime_confidence": regime_confidence,
             "candidates": candidates,
-            "min_score_threshold": min_buy,
+            "skipped_symbols": skipped_symbols,
+            "min_score_threshold": effective_min_buy,
         })
 
         return candidates
@@ -552,13 +740,24 @@ class TradingOrchestrator:
         print("=" * 60)
 
         # Market hours check
+        now_et = datetime.now(ET)
+        market_session = "regular"
         try:
             clock = self.client.is_market_open()
             if not clock["is_open"]:
                 print(f"  ⚠️  Market is currently CLOSED. Next open: {clock['next_open']}")
                 print(f"  ⚠️  Stock orders will be queued until market opens.")
+                market_session = "closed"
         except Exception as e:
             print(f"  ⚠️  Could not check market hours: {e}")
+
+        # Timing restrictions (Eastern Time): 9:30-9:45 and 15:45-16:00
+        hour, minute = now_et.hour, now_et.minute
+        in_restricted_window = (
+            (hour == 9 and 30 <= minute < 45) or
+            (hour == 15 and minute >= 45) or
+            (hour == 16 and minute == 0)
+        )
 
         tradeable = [t for t in approved_trades if t.get("approved")]
 
@@ -567,6 +766,37 @@ class TradingOrchestrator:
             return
 
         for trade in tradeable:
+            # Skip new entries during restricted windows (exits still allowed)
+            if in_restricted_window and trade.get("action") != "close_position":
+                print(f"  ⏳ {trade['symbol']}: Skipping new entry during restricted window "
+                      f"({now_et.strftime('%H:%M')} ET)")
+                continue
+
+            # Liquidity pre-check
+            mkt_info = None
+            try:
+                mkt_path = self.state_dir / "market_overview.json"
+                if mkt_path.exists():
+                    with open(mkt_path) as f:
+                        mkt_info = json.load(f)
+            except Exception:
+                pass
+
+            avg_vol = 0
+            if mkt_info:
+                avg_vol = mkt_info.get("stocks", {}).get(trade["symbol"], {}).get("avg_volume_20d", 0)
+
+            estimated_slippage_bps = 5
+            if avg_vol > 0 and trade.get("suggested_qty", 0) > 0:
+                qty_ratio = trade["suggested_qty"] / avg_vol
+                estimated_slippage_bps = 5 + qty_ratio * 1000
+
+                if qty_ratio > 0.05:
+                    print(f"  ❌ {trade['symbol']}: Qty ({trade['suggested_qty']}) > 5% of avg volume ({avg_vol}) - skipping")
+                    continue
+                elif qty_ratio > 0.01:
+                    print(f"  ⚠️  {trade['symbol']}: Qty is {qty_ratio*100:.1f}% of avg volume - potential market impact")
+
             print(f"\n  📋 Trade Plan:")
             print(f"     Symbol: {trade['symbol']}")
             print(f"     Side: {trade['side'].upper()}")
@@ -575,6 +805,7 @@ class TradingOrchestrator:
             print(f"     Stop Loss: ${trade['stop_loss']:.2f}" if trade.get("stop_loss") else "")
             print(f"     Take Profit: ${trade['take_profit']:.2f}" if trade.get("take_profit") else "")
             print(f"     Score: {trade['composite_score']:.3f}")
+            print(f"     Est. Slippage: {estimated_slippage_bps:.1f} bps")
 
             if require_confirmation:
                 confirm = input(f"\n  ❓ Execute this trade? (y/n): ").strip().lower()
@@ -600,8 +831,11 @@ class TradingOrchestrator:
 
                 print(f"  ✅ Order placed: {result['id']} | Status: {result['status']}")
 
-                # Log trade
-                self._log_trade(trade, result)
+                # Log trade with slippage info
+                trade_log_entry = dict(trade)
+                trade_log_entry["estimated_slippage_bps"] = round(estimated_slippage_bps, 1)
+                trade_log_entry["market_session"] = market_session
+                self._log_trade(trade_log_entry, result)
 
                 # Telegram notification
                 self.notifier.alert_order_executed(
@@ -642,8 +876,8 @@ class TradingOrchestrator:
         # Step 3: Sentiment analysis
         sentiment = self.run_sentiment_analyst()
 
-        # Step 3.5: Position exit review
-        exit_candidates = self.run_position_exit_review(tech_signals, market_data)
+        # Step 3.5: Position exit review (now with sentiment data)
+        exit_candidates = self.run_position_exit_review(tech_signals, market_data, sentiment)
 
         # Execute exits BEFORE new entries (frees capital & position slots)
         if execute and exit_candidates:
@@ -691,6 +925,10 @@ class TradingOrchestrator:
         account = self.client.get_account()
         positions = self.client.get_positions()
         self.notifier.report_portfolio(account, positions)
+
+        # Risk dashboard notification
+        summary = self.risk_manager.get_risk_summary()
+        self.notifier.report_risk_dashboard(summary)
 
         # Final summary
         self._print_summary(assessed)
@@ -755,6 +993,8 @@ class TradingOrchestrator:
             "score": trade["composite_score"],
             "order_id": result["id"],
             "order_status": result["status"],
+            "estimated_slippage_bps": trade.get("estimated_slippage_bps"),
+            "market_session": trade.get("market_session"),
         })
 
         with open(log_path, "w") as f:

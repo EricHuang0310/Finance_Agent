@@ -6,7 +6,8 @@ Screens stocks by:
 - Volume (most active)
 - Price momentum (top gainers/losers)
 - Volatility
-- Liquidity filters (min price, min volume)
+- Liquidity filters (min price, min volume, min dollar volume)
+- Trading days completeness
 
 """
 
@@ -31,9 +32,10 @@ class SymbolScreener:
         self.min_avg_volume = self.screener_cfg.get("min_avg_volume", 500_000)
         self.min_market_cap = self.screener_cfg.get("min_market_cap", 1_000_000_000)
         self.lookback_days = self.screener_cfg.get("lookback_days", 20)
+        self.min_dollar_volume = self.screener_cfg.get("min_dollar_volume", 5_000_000)
+        self.max_sector_pct = self.screener_cfg.get("max_sector_pct", 40) / 100
 
         # Universe: broad set of liquid, well-known stocks to screen from
-        # This avoids scanning the entire market (thousands of symbols)
         self._stock_universe = self.screener_cfg.get("universe", [
             # Mega-cap tech
             "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
@@ -112,11 +114,19 @@ class SymbolScreener:
 
         print(f"  Screening {len(universe)} total symbols...")
         results = []
+        data_errors = []
 
         for symbol in universe:
             try:
                 bars = self._get_bars(symbol, "stock")
                 if bars is None or len(bars) < 10:
+                    data_errors.append(f"{symbol}: insufficient bars")
+                    continue
+
+                # Trading days completeness check
+                min_bars = int(self.lookback_days * 0.8)
+                if len(bars) < min_bars:
+                    data_errors.append(f"{symbol}: only {len(bars)}/{min_bars} required bars")
                     continue
 
                 info = self._compute_metrics(bars, symbol)
@@ -131,17 +141,31 @@ class SymbolScreener:
                 if info["avg_volume"] < self.min_avg_volume:
                     continue
 
+                # Dollar volume filter
+                avg_dollar_volume = info["avg_volume"] * info["latest_close"]
+                if avg_dollar_volume < self.min_dollar_volume:
+                    continue
+                info["avg_dollar_volume"] = avg_dollar_volume
+
                 results.append(info)
 
             except Exception as e:
-                # Silently skip symbols that fail (delisted, no data, etc.)
-                pass
+                data_errors.append(f"{symbol}: {str(e)[:50]}")
 
         # Rank by composite activity score
         results.sort(key=lambda x: x["activity_score"], reverse=True)
 
         top = results[: self.max_stocks]
         print(f"  Selected {len(top)} stocks from {len(results)} that passed filters")
+
+        # Store screening stats
+        self._screening_stats = {
+            "total_scanned": len(universe),
+            "passed_hard_filters": len(results),
+            "final_selected": len(top),
+            "data_errors": data_errors[:20],  # Cap to avoid huge output
+        }
+
         return top
 
     def screen_all(self) -> dict:
@@ -152,7 +176,8 @@ class SymbolScreener:
             {
                 "stocks": ["NVDA", "TSLA", ...],
                 "details": { "NVDA": {...}, ... },
-                "timestamp": "..."
+                "timestamp": "...",
+                "screening_stats": {...}
             }
         """
         stock_results = self.screen_stocks()
@@ -167,6 +192,7 @@ class SymbolScreener:
                 "volume_ratio": round(r["volume_ratio"], 2),
                 "volatility": round(r["volatility"], 4),
                 "activity_score": round(r["activity_score"], 4),
+                "avg_dollar_volume": round(r.get("avg_dollar_volume", 0), 0),
             }
 
         return {
@@ -178,6 +204,7 @@ class SymbolScreener:
                 "dynamic_discovered": getattr(self, "_dynamic_count", 0),
                 "total_screened": len(self._stock_universe) + getattr(self, "_dynamic_count", 0),
             },
+            "screening_stats": getattr(self, "_screening_stats", {}),
         }
 
     def _compute_metrics(self, bars: pd.DataFrame, symbol: str) -> Optional[dict]:

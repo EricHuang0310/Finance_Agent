@@ -13,7 +13,7 @@ Rate-limit handling:
 
 import json
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Optional
 
 from src.state_dir import get_state_dir
@@ -44,9 +44,15 @@ class FundamentalSignal:
     earnings_growth: Optional[float] = None
     free_cash_flow: Optional[float] = None
     market_cap: Optional[float] = None
+    roe: Optional[float] = None
+    operating_margin: Optional[float] = None
+    short_interest_pct: Optional[float] = None
     sector: str = "unknown"
     industry: str = "unknown"
     summary: str = ""
+    pe_vs_sector: str = "unknown"  # "premium", "discount", "inline"
+    red_flags: list = field(default_factory=list)
+    highlights: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -63,6 +69,22 @@ def _format_large_number(n: Optional[float]) -> str:
     if abs_n >= 1e6:
         return f"${n/1e6:.1f}M"
     return f"${n:,.0f}"
+
+
+# Rough sector average P/E for comparison
+_SECTOR_AVG_PE = {
+    "Technology": 30,
+    "Healthcare": 25,
+    "Financial Services": 15,
+    "Consumer Cyclical": 22,
+    "Consumer Defensive": 20,
+    "Industrials": 20,
+    "Energy": 12,
+    "Communication Services": 18,
+    "Utilities": 18,
+    "Real Estate": 35,
+    "Basic Materials": 15,
+}
 
 
 class FundamentalsAnalyzer:
@@ -136,8 +158,48 @@ class FundamentalsAnalyzer:
         earn_growth = info.get("earningsGrowth")
         fcf = info.get("freeCashflow")
         mcap = info.get("marketCap")
+        roe = info.get("returnOnEquity")
+        operating_margin = info.get("operatingMargins")
+        short_pct = info.get("shortPercentOfFloat")
         sector = info.get("sector", "unknown")
         industry = info.get("industry", "unknown")
+
+        # P/E vs sector comparison
+        pe_vs_sector = "unknown"
+        if pe is not None and sector in _SECTOR_AVG_PE:
+            avg_pe = _SECTOR_AVG_PE[sector]
+            if pe < avg_pe * 0.8:
+                pe_vs_sector = "discount"
+            elif pe > avg_pe * 1.2:
+                pe_vs_sector = "premium"
+            else:
+                pe_vs_sector = "inline"
+
+        # Red flags
+        red_flags = []
+        if de is not None and de > 200:
+            red_flags.append(f"High D/E: {de:.0f}%")
+        if fcf is not None and fcf < 0:
+            red_flags.append(f"Negative FCF: {_format_large_number(fcf)}")
+        if rev_growth is not None and rev_growth < 0:
+            red_flags.append(f"Revenue declining: {rev_growth*100:+.1f}%")
+        if short_pct is not None and short_pct > 0.10:
+            red_flags.append(f"High short interest: {short_pct*100:.1f}%")
+
+        # Highlights
+        highlights = []
+        if earn_growth is not None and earn_growth > 0.20:
+            highlights.append(f"Strong earnings growth: {earn_growth*100:+.1f}%")
+        if roe is not None and roe > 0.20:
+            highlights.append(f"High ROE: {roe*100:.1f}%")
+        if operating_margin is not None and operating_margin > 0.25:
+            highlights.append(f"High operating margin: {operating_margin*100:.1f}%")
+        if pe_vs_sector == "discount":
+            highlights.append(f"Undervalued vs sector (P/E: {pe:.1f})")
+        if fcf is not None and fcf > 0 and mcap and mcap > 0:
+            fcf_yield = fcf / mcap
+            if fcf_yield > 0.05:
+                highlights.append(f"Strong FCF yield: {fcf_yield*100:.1f}%")
 
         parts = [f"{symbol} ({sector} / {industry})"]
         if pe is not None:
@@ -150,6 +212,10 @@ class FundamentalsAnalyzer:
             parts.append(f"Revenue Growth: {rev_growth*100:+.1f}%")
         if earn_growth is not None:
             parts.append(f"Earnings Growth: {earn_growth*100:+.1f}%")
+        if roe is not None:
+            parts.append(f"ROE: {roe*100:.1f}%")
+        if operating_margin is not None:
+            parts.append(f"Op Margin: {operating_margin*100:.1f}%")
         if fcf is not None:
             parts.append(f"Free Cash Flow: {_format_large_number(fcf)}")
         if mcap is not None:
@@ -159,8 +225,13 @@ class FundamentalsAnalyzer:
             symbol=symbol, pe_ratio=pe, forward_pe=fwd_pe, pb_ratio=pb,
             debt_to_equity=de, revenue_growth=rev_growth,
             earnings_growth=earn_growth, free_cash_flow=fcf,
-            market_cap=mcap, sector=sector, industry=industry,
+            market_cap=mcap, roe=roe, operating_margin=operating_margin,
+            short_interest_pct=short_pct,
+            sector=sector, industry=industry,
             summary=" | ".join(parts),
+            pe_vs_sector=pe_vs_sector,
+            red_flags=red_flags,
+            highlights=highlights,
         )
 
     def analyze(self, symbol: str) -> Optional[FundamentalSignal]:
@@ -197,7 +268,9 @@ class FundamentalsAnalyzer:
             signal = self.analyze(symbol)
             results[symbol] = signal
             if signal:
-                print(f"  📋 {signal.summary}")
+                flags = f" | Red flags: {signal.red_flags}" if signal.red_flags else ""
+                stars = f" | Highlights: {signal.highlights}" if signal.highlights else ""
+                print(f"  📋 {signal.summary}{flags}{stars}")
             else:
                 print(f"  ⏭️  {symbol}: skipped (unavailable)")
         return results

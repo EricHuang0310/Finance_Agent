@@ -12,10 +12,11 @@ Setup:
 5. Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to config/.env
 """
 
-import os
 import json
+import os
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -170,7 +171,7 @@ class TelegramNotifier:
         self.send(msg)
 
     def alert_kill_switch(self, daily_pnl: float, daily_pnl_pct: float):
-        """🚨 Emergency kill switch alert."""
+        """Emergency kill switch alert."""
         msg = (
             f"🚨🚨🚨 *KILL SWITCH ACTIVATED* 🚨🚨🚨\n\n"
             f"All positions closed. All orders cancelled.\n\n"
@@ -313,6 +314,103 @@ class TelegramNotifier:
         if risk_summary.get("daily_limit_hit"):
             msg += "\n⛔ *DAILY LIMIT REACHED*\n"
 
+        self.send(msg)
+
+    def report_risk_dashboard(self, risk_summary: dict):
+        """Send comprehensive risk dashboard with kill switch distance and sector exposure."""
+        equity = risk_summary.get("equity", 0)
+        daily_pnl_pct = risk_summary.get("daily_pnl_pct", 0)
+        drawdown_pct = risk_summary.get("drawdown_from_peak_pct", 0)
+        max_drawdown = risk_summary.get("max_drawdown_pct", 10)
+        kill_switch_active = risk_summary.get("kill_switch_active", False)
+
+        # Kill switch distance
+        kill_switch_pct = 3.0  # default
+        kill_distance = kill_switch_pct - abs(daily_pnl_pct) if daily_pnl_pct < 0 else kill_switch_pct
+        drawdown_distance = max_drawdown - drawdown_pct
+
+        status_emoji = "🚨" if kill_switch_active else "🟢" if kill_distance > 2 else "🟡" if kill_distance > 1 else "🔴"
+
+        msg = (
+            f"{'━' * 30}\n"
+            f"🛡️ *RISK DASHBOARD*\n"
+            f"{'━' * 30}\n\n"
+            f"{status_emoji} Status: {'KILL SWITCH ACTIVE' if kill_switch_active else 'Active'}\n\n"
+            f"💰 Equity: `${equity:,.2f}`\n"
+            f"📈 Day P&L: `{daily_pnl_pct:+.2f}%`\n"
+            f"📉 Drawdown: `{drawdown_pct:.2f}%` / `{max_drawdown:.0f}%`\n"
+            f"{'─' * 25}\n"
+            f"🎯 Kill Switch Distance: `{kill_distance:.2f}%`\n"
+            f"🎯 Max Drawdown Distance: `{drawdown_distance:.2f}%`\n"
+        )
+
+        # Sector exposure
+        sector_exposure = risk_summary.get("sector_exposure", {})
+        if sector_exposure:
+            msg += f"\n{'─' * 25}\n*Sector Exposure:*\n"
+            for sector, pct in sorted(sector_exposure.items(), key=lambda x: x[1], reverse=True)[:5]:
+                bar = "▓" * int(pct / 5) + "░" * max(0, 6 - int(pct / 5))
+                msg += f"  {bar} `{sector}`: `{pct:.1f}%`\n"
+
+        msg += f"\n🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        self.send(msg)
+
+    def report_strategy_health(self, trade_log_path: str = "logs/trade_log.json"):
+        """Send strategy health metrics based on trade log."""
+        try:
+            log_path = Path(trade_log_path)
+            if not log_path.exists():
+                return
+
+            with open(log_path) as f:
+                trades = json.load(f)
+
+            if not trades or len(trades) < 5:
+                return
+
+            # Rolling 20-trade metrics
+            recent = trades[-20:]
+            wins = sum(1 for t in recent if t.get("score", 0) > 0)
+            losses = len(recent) - wins
+            win_rate = wins / len(recent) * 100
+
+            # Profit factor (simplified from scores)
+            gross_profit = sum(t.get("score", 0) for t in recent if t.get("score", 0) > 0)
+            gross_loss = abs(sum(t.get("score", 0) for t in recent if t.get("score", 0) < 0))
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+
+            health_emoji = "🟢" if win_rate > 55 and profit_factor > 1.5 else "🟡" if win_rate > 45 else "🔴"
+
+            msg = (
+                f"{'━' * 30}\n"
+                f"📈 *STRATEGY HEALTH*\n"
+                f"{'━' * 30}\n\n"
+                f"{health_emoji} Overall: {'Healthy' if win_rate > 55 else 'Caution' if win_rate > 45 else 'Review needed'}\n\n"
+                f"📊 Win Rate (20): `{win_rate:.1f}%` ({wins}W/{losses}L)\n"
+                f"📊 Profit Factor: `{profit_factor:.2f}`\n"
+                f"📋 Total Trades: `{len(trades)}`\n"
+                f"\n🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            self.send(msg)
+        except Exception:
+            pass
+
+    def alert_earnings_upcoming(self, positions_with_earnings: list[dict]):
+        """Alert for held positions with upcoming earnings."""
+        if not positions_with_earnings:
+            return
+
+        msg = (
+            f"⚠️ *EARNINGS ALERT*\n\n"
+            f"Held positions with upcoming earnings:\n\n"
+        )
+        for p in positions_with_earnings:
+            msg += (
+                f"  📅 *{p['symbol']}* - {p.get('earnings_date', 'Date TBD')}\n"
+                f"     Side: `{p.get('side', 'N/A')}` | P&L: `{p.get('unrealized_plpc', 0)*100:+.1f}%`\n"
+            )
+
+        msg += f"\n🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         self.send(msg)
 
     # ──────────────────────────────────────────────

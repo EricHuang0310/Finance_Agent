@@ -148,6 +148,8 @@ def task_save_reflections(trade_id: str, orchestrator) -> bool:
         orchestrator.risk_judge_memory.add(situation, result["lesson_risk"])
     if result.get("lesson_general"):
         orchestrator.decision_engine_memory.add(situation, result["lesson_general"])
+    if result.get("lesson_decision_engine"):
+        orchestrator.decision_engine_memory.add(situation, result["lesson_decision_engine"])
 
     # Mark this trade as reflected
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -167,6 +169,116 @@ def task_save_reflections(trade_id: str, orchestrator) -> bool:
     return True
 
 
+def compute_performance_attribution(trade_record: dict, original_signals: dict = None) -> dict:
+    """Compute 6-dimension performance attribution for a closed trade.
+
+    Dimensions: direction, timing, sizing, exit, execution, external
+    Each dimension gets a score from -1.0 (poor) to 1.0 (good).
+    """
+    attribution = {
+        "direction": 0.0,
+        "timing": 0.0,
+        "sizing": 0.0,
+        "exit": 0.0,
+        "execution": 0.0,
+        "external": 0.0,
+    }
+
+    actual_return = trade_record.get("unrealized_plpc", 0)
+    side = trade_record.get("side", "buy")
+
+    # Direction: was the trade direction correct?
+    if (side == "buy" and actual_return > 0) or (side == "sell" and actual_return < 0):
+        attribution["direction"] = min(1.0, abs(actual_return) * 10)
+    else:
+        attribution["direction"] = -min(1.0, abs(actual_return) * 10)
+
+    # Timing: how much of the move was captured?
+    score = trade_record.get("score", 0)
+    if abs(score) > 0.5 and abs(actual_return) > 0.02:
+        attribution["timing"] = 0.5 if actual_return > 0 else -0.5
+    else:
+        attribution["timing"] = 0.0
+
+    # Execution: slippage assessment
+    slippage = trade_record.get("estimated_slippage_bps", 0)
+    if slippage < 10:
+        attribution["execution"] = 0.5
+    elif slippage < 30:
+        attribution["execution"] = 0.0
+    else:
+        attribution["execution"] = -0.5
+
+    return attribution
+
+
+def compute_signal_accuracy(trade_record: dict, original_signals: dict = None) -> dict:
+    """Evaluate per-signal accuracy vs actual outcome."""
+    accuracy = {}
+
+    actual_return = trade_record.get("unrealized_plpc", 0)
+    was_profitable = actual_return > 0
+
+    if original_signals:
+        tech_score = original_signals.get("score", 0)
+        tech_predicted_buy = tech_score > 0.3
+        accuracy["technical"] = {
+            "predicted": "buy" if tech_predicted_buy else "sell",
+            "correct": (tech_predicted_buy and was_profitable) or (not tech_predicted_buy and not was_profitable),
+        }
+
+    return accuracy
+
+
+def compute_strategy_decay(trade_log_path: str = "logs/trade_log.json") -> dict:
+    """Compute rolling win rate and profit factor with decay warnings."""
+    log_path = Path(trade_log_path)
+    if not log_path.exists():
+        return {"status": "no_data"}
+
+    try:
+        with open(log_path) as f:
+            trades = json.load(f)
+    except (json.JSONDecodeError, TypeError):
+        return {"status": "error"}
+
+    if len(trades) < 10:
+        return {"status": "insufficient_data", "trade_count": len(trades)}
+
+    # Rolling 20-trade window
+    recent = trades[-20:]
+    wins = sum(1 for t in recent if t.get("score", 0) > 0)
+    win_rate = wins / len(recent)
+
+    # Profit factor
+    gains = sum(t.get("score", 0) for t in recent if t.get("score", 0) > 0)
+    losses = abs(sum(t.get("score", 0) for t in recent if t.get("score", 0) < 0))
+    profit_factor = gains / losses if losses > 0 else float('inf')
+
+    # Decay flags
+    decay_warnings = []
+    if win_rate < 0.40:
+        decay_warnings.append("Low win rate (<40%)")
+    if profit_factor < 1.0:
+        decay_warnings.append("Profit factor below 1.0")
+    if len(trades) >= 40:
+        # Compare recent 20 to prior 20
+        prior = trades[-40:-20]
+        prior_wins = sum(1 for t in prior if t.get("score", 0) > 0)
+        prior_wr = prior_wins / len(prior)
+        if win_rate < prior_wr * 0.8:
+            decay_warnings.append(f"Win rate declining: {prior_wr*100:.0f}% → {win_rate*100:.0f}%")
+
+    return {
+        "status": "ok",
+        "win_rate": round(win_rate, 4),
+        "profit_factor": round(profit_factor, 4),
+        "recent_trades": len(recent),
+        "total_trades": len(trades),
+        "decay_warnings": decay_warnings,
+    }
+
+
 def _build_situation_summary(context: dict) -> str:
     """Build a concise situation summary for memory storage."""
     parts = [f"Symbol: {context.get('symbol', '?')}"]
@@ -182,7 +294,11 @@ def _build_situation_summary(context: dict) -> str:
 
     market = context.get("original_market", {})
     if market:
-        parts.append(f"Regime: {market.get('market_regime', 'N/A')}")
+        regime_data = market.get("market_regime", {})
+        if isinstance(regime_data, dict):
+            parts.append(f"Regime: {regime_data.get('regime', 'N/A')}")
+        else:
+            parts.append(f"Regime: {regime_data}")
 
     trade = context.get("trade_record", {})
     parts.append(f"Action: {trade.get('action', 'N/A')}")

@@ -4,7 +4,7 @@ Evaluates existing positions to determine if they should be closed
 based on momentum/trend signals.
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Optional, Callable
 
 import pandas as pd
@@ -29,6 +29,9 @@ class ExitSignal:
     trend: str
     rsi: float
     atr: float
+    exit_urgency: str = "normal"  # "high" if exit_score >= 0.7
+    holding_days: int = 0
+    exit_score_breakdown: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -42,6 +45,7 @@ class PositionReviewer:
         self.exit_threshold = exit_cfg.get("exit_threshold", 0.5)
         self.atr_multiplier = exit_cfg.get("atr_multiplier", 2.0)
         self.trailing_lookback_bars = exit_cfg.get("trailing_lookback_bars", 10)
+        self.max_positions = config.get("risk", {}).get("max_positions", 8)
 
         self.tech_analyzer = TechnicalAnalyzer()
 
@@ -51,53 +55,70 @@ class PositionReviewer:
         tech_signal: TechnicalSignal,
         market_score: float,
         bars: pd.DataFrame,
+        sentiment_data: dict = None,
     ) -> ExitSignal:
         """Evaluate a single position for exit.
 
-        Args:
-            position: from AlpacaClient.get_positions() — has symbol, qty, side,
-                      avg_entry_price, current_price, unrealized_pl, unrealized_plpc
-            tech_signal: current technical analysis for this symbol
-            market_score: current market analyst score for this symbol
-            bars: historical bar data for trailing stop calculation
+        Weights: trend 0.30, momentum 0.20, ATR trailing 0.20,
+                 market 0.10, time_decay 0.10, event_risk 0.10
         """
         is_long = position["side"] == "long"
         exit_score = 0.0
         reasons = []
+        breakdown = {}
 
-        # ── 1. Trend Reversal (weight: 0.35) ──
+        # Compute holding days
+        holding_days = 0
+        if position.get("avg_entry_price") and position.get("change_today") is not None:
+            # Approximate holding days from position data if available
+            pass
+        # Use created_at if available
+        if position.get("created_at"):
+            try:
+                from datetime import datetime, timezone
+                created = position["created_at"]
+                if isinstance(created, str):
+                    # Parse ISO format
+                    created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                holding_days = (now - created).days
+            except Exception:
+                pass
+
+        # ── 1. Trend Reversal (weight: 0.30) ──
+        trend_contribution = 0.0
         if is_long and tech_signal.score < 0:
-            contribution = 0.35 * min(1.0, abs(tech_signal.score))
-            exit_score += contribution
+            trend_contribution = 0.30 * min(1.0, abs(tech_signal.score))
             reasons.append(f"trend reversed (score={tech_signal.score:.2f})")
         elif not is_long and tech_signal.score > 0:
-            contribution = 0.35 * min(1.0, abs(tech_signal.score))
-            exit_score += contribution
+            trend_contribution = 0.30 * min(1.0, abs(tech_signal.score))
             reasons.append(f"trend reversed (score={tech_signal.score:.2f})")
+        exit_score += trend_contribution
+        breakdown["trend_reversal"] = round(trend_contribution, 4)
 
-        # ── 2. Momentum Weakening (weight: 0.25) ──
+        # ── 2. Momentum Weakening (weight: 0.20) ──
+        momentum_contribution = 0.0
         if is_long:
             if tech_signal.rsi < 50:
                 rsi_component = min(1.0, (50 - tech_signal.rsi) / 20)
-                exit_score += 0.125 * rsi_component
+                momentum_contribution += 0.10 * rsi_component
                 reasons.append(f"RSI weakened ({tech_signal.rsi:.1f})")
             if tech_signal.trend != "bullish":
-                exit_score += 0.125
-                if "RSI" not in (reasons[-1] if reasons else ""):
-                    reasons.append(f"EMA alignment broken (trend={tech_signal.trend})")
-                else:
-                    reasons.append(f"EMA alignment broken")
+                momentum_contribution += 0.10
+                reasons.append(f"EMA alignment broken (trend={tech_signal.trend})")
         else:
             if tech_signal.rsi > 50:
                 rsi_component = min(1.0, (tech_signal.rsi - 50) / 20)
-                exit_score += 0.125 * rsi_component
+                momentum_contribution += 0.10 * rsi_component
                 reasons.append(f"RSI weakened ({tech_signal.rsi:.1f})")
             if tech_signal.trend != "bearish":
-                exit_score += 0.125
+                momentum_contribution += 0.10
                 reasons.append(f"EMA alignment broken (trend={tech_signal.trend})")
+        exit_score += momentum_contribution
+        breakdown["momentum_weakening"] = round(momentum_contribution, 4)
 
-        # ── 3. Trailing Stop via ATR (weight: 0.25) ──
-        trailing_stop = None
+        # ── 3. Trailing Stop via ATR (weight: 0.20) ──
+        trailing_contribution = 0.0
         if bars is not None and len(bars) >= self.trailing_lookback_bars:
             closes = bars["close"].astype(float)
             recent = closes.tail(self.trailing_lookback_bars)
@@ -108,27 +129,59 @@ class PositionReviewer:
                 trailing_stop = recent_high - self.atr_multiplier * tech_signal.atr
                 if current_price < trailing_stop:
                     breach_pct = (trailing_stop - current_price) / max(trailing_stop, 0.01)
-                    exit_score += 0.25 * min(1.0, breach_pct * 10 + 0.5)
+                    trailing_contribution = 0.20 * min(1.0, breach_pct * 10 + 0.5)
                     reasons.append(f"trailing stop breached (${trailing_stop:.2f})")
             else:
                 recent_low = float(recent.min())
                 trailing_stop = recent_low + self.atr_multiplier * tech_signal.atr
                 if current_price > trailing_stop:
                     breach_pct = (current_price - trailing_stop) / max(trailing_stop, 0.01)
-                    exit_score += 0.25 * min(1.0, breach_pct * 10 + 0.5)
+                    trailing_contribution = 0.20 * min(1.0, breach_pct * 10 + 0.5)
                     reasons.append(f"trailing stop breached (${trailing_stop:.2f})")
+        exit_score += trailing_contribution
+        breakdown["atr_trailing_stop"] = round(trailing_contribution, 4)
 
-        # ── 4. Market Context Deterioration (weight: 0.15) ──
+        # ── 4. Market Context Deterioration (weight: 0.10) ──
+        market_contribution = 0.0
         if is_long and market_score < -0.2:
-            exit_score += 0.15 * min(1.0, abs(market_score))
+            market_contribution = 0.10 * min(1.0, abs(market_score))
             reasons.append(f"market context bearish ({market_score:.2f})")
         elif not is_long and market_score > 0.2:
-            exit_score += 0.15 * min(1.0, abs(market_score))
+            market_contribution = 0.10 * min(1.0, abs(market_score))
             reasons.append(f"market context bullish ({market_score:.2f})")
+        exit_score += market_contribution
+        breakdown["market_context"] = round(market_contribution, 4)
+
+        # ── 5. Time Decay (weight: 0.10) ──
+        time_decay_contribution = 0.0
+        if holding_days > 20:
+            time_decay_contribution = 0.10
+        elif holding_days > 10:
+            time_decay_contribution = 0.06
+        elif holding_days > 5:
+            time_decay_contribution = 0.03
+        if time_decay_contribution > 0:
+            exit_score += time_decay_contribution
+            reasons.append(f"time decay ({holding_days}d held)")
+        breakdown["time_decay"] = round(time_decay_contribution, 4)
+
+        # ── 6. Event Risk (weight: 0.10) ──
+        event_contribution = 0.0
+        if sentiment_data:
+            sym_sent = sentiment_data.get("symbols", {}).get(position["symbol"], {})
+            if sym_sent.get("upcoming_earnings"):
+                event_contribution = 0.07
+                reasons.append("upcoming earnings")
+            if sym_sent.get("binary_event"):
+                event_contribution = 0.10
+                reasons.append("binary event risk")
+        exit_score += event_contribution
+        breakdown["event_risk"] = round(event_contribution, 4)
 
         exit_score = min(1.0, exit_score)
         exit_action = "close" if exit_score >= self.exit_threshold else "hold"
         exit_reason = "; ".join(reasons) if reasons else "holding - trend intact"
+        exit_urgency = "high" if exit_score >= 0.7 else "normal"
 
         return ExitSignal(
             symbol=position["symbol"],
@@ -145,6 +198,9 @@ class PositionReviewer:
             trend=tech_signal.trend,
             rsi=tech_signal.rsi,
             atr=tech_signal.atr,
+            exit_urgency=exit_urgency,
+            holding_days=holding_days,
+            exit_score_breakdown=breakdown,
         )
 
     def review_all(
@@ -153,15 +209,9 @@ class PositionReviewer:
         tech_signals: dict,
         market_data: dict,
         bars_getter: Callable,
+        sentiment_data: dict = None,
     ) -> list[ExitSignal]:
-        """Review all positions for exit signals.
-
-        Args:
-            positions: from AlpacaClient.get_positions()
-            tech_signals: {"stocks": {...}} from technical analyst
-            market_data: {"stocks": {...}} from market analyst
-            bars_getter: callable(symbol, asset_type) -> pd.DataFrame
-        """
+        """Review all positions for exit signals."""
         results = []
 
         for pos in positions:
@@ -179,7 +229,7 @@ class PositionReviewer:
             # Get bars for trailing stop
             bars = bars_getter(symbol, "stock")
 
-            signal = self.review_position(pos, tech_signal, market_score, bars)
+            signal = self.review_position(pos, tech_signal, market_score, bars, sentiment_data)
             results.append(signal)
 
         return results
