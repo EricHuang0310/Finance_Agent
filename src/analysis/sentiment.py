@@ -7,6 +7,7 @@ Includes catalyst identification, earnings detection, and signal/noise classific
 import math
 import re
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -34,10 +35,11 @@ _NOISE_KEYWORDS = re.compile(
     r'press release|sponsored|promoted)\b', re.IGNORECASE)
 
 # Hardcoded macro event awareness (approximate recurring dates)
+# NOTE: dates should be populated from an external calendar if available
 _MACRO_EVENTS = [
-    {"event": "FOMC", "description": "Federal Reserve meeting"},
-    {"event": "CPI", "description": "Consumer Price Index release"},
-    {"event": "NFP", "description": "Non-Farm Payrolls"},
+    {"event": "FOMC", "description": "Federal Reserve meeting", "impact": "high"},
+    {"event": "CPI", "description": "Consumer Price Index release", "impact": "medium_high"},
+    {"event": "NFP", "description": "Non-Farm Payrolls", "impact": "medium_high"},
 ]
 
 
@@ -111,6 +113,7 @@ class SentimentAnalyzer:
             print(f"    ⚠️  News fetch failed for {symbol}: {e}")
             return {
                 "score": 0.0,
+                "confidence": 0.1,
                 "news_count": 0,
                 "sentiment": "neutral",
                 "top_headlines": [],
@@ -119,13 +122,16 @@ class SentimentAnalyzer:
                 "noise_count": 0,
                 "catalysts": [],
                 "upcoming_earnings": False,
+                "earnings_imminent": False,
                 "binary_event": False,
                 "earnings_date": None,
+                "data_source": "unavailable",
             }
 
         if not articles:
             return {
                 "score": 0.0,
+                "confidence": 0.2,
                 "news_count": 0,
                 "sentiment": "neutral",
                 "top_headlines": [],
@@ -134,6 +140,7 @@ class SentimentAnalyzer:
                 "noise_count": 0,
                 "catalysts": [],
                 "upcoming_earnings": False,
+                "earnings_imminent": False,
                 "binary_event": False,
                 "earnings_date": None,
             }
@@ -201,12 +208,23 @@ class SentimentAnalyzer:
         scored_articles.sort(reverse=True)
         top_headlines = [h for _, h in scored_articles[:5]]
 
-        label = "bullish" if score > 0.15 else "bearish" if score < -0.15 else "neutral"
+        if score > 0.4:
+            label = "bullish"
+        elif score > 0.15:
+            label = "slightly_bullish"
+        elif score >= -0.15:
+            label = "neutral"
+        elif score >= -0.4:
+            label = "slightly_bearish"
+        else:
+            label = "bearish"
 
         # Confidence based on article count
         news_count = len(articles)
         if news_count == 0:
             confidence = 0.2
+        elif news_count == 1:
+            confidence = 0.3
         elif news_count <= 3:
             confidence = 0.5
         elif news_count <= 9:
@@ -217,10 +235,19 @@ class SentimentAnalyzer:
         # Catalyst detection
         catalyst_info = self._detect_catalysts(all_headlines)
 
-        # Earnings date (only if earnings catalyst detected)
+        # Earnings date and imminence check
         earnings_date = None
+        earnings_imminent = False
         if catalyst_info["upcoming_earnings"]:
             earnings_date = self._get_earnings_date(symbol)
+        if earnings_date:
+            try:
+                ed = datetime.strptime(earnings_date[:10], "%Y-%m-%d").date()
+                days_until = (ed - datetime.now(timezone.utc).date()).days
+                if 0 <= days_until <= 3:
+                    earnings_imminent = True
+            except (ValueError, TypeError):
+                pass
 
         # Sort key_headlines by absolute sentiment (most impactful first), keep top 10
         key_headlines.sort(key=lambda x: abs(x["sentiment"]), reverse=True)
@@ -237,6 +264,7 @@ class SentimentAnalyzer:
             "noise_count": noise_count,
             "catalysts": catalyst_info["catalysts"],
             "upcoming_earnings": catalyst_info["upcoming_earnings"],
+            "earnings_imminent": earnings_imminent,
             "binary_event": catalyst_info["binary_event"],
             "earnings_date": earnings_date,
         }
@@ -252,7 +280,7 @@ class SentimentAnalyzer:
             if result["news_count"] > 0:
                 all_scores.append(result["score"])
 
-            emoji = "🟢" if result["sentiment"] == "bullish" else "🔴" if result["sentiment"] == "bearish" else "🟡"
+            emoji = "🟢" if "bullish" in result["sentiment"] else "🔴" if "bearish" in result["sentiment"] else "🟡"
             catalyst_str = f" | catalysts: {result['catalysts']}" if result["catalysts"] else ""
             print(f"  {emoji} {symbol}: score={result['score']:.4f} | "
                   f"news={result['news_count']} (sig={result['signal_count']}/noise={result['noise_count']}) | "
@@ -275,10 +303,19 @@ class SentimentAnalyzer:
         for event in _MACRO_EVENTS:
             upcoming_macro_events.append(event)
 
-        return {
+        result = {
             "timestamp": datetime.now().isoformat(),
             "market_sentiment": market_label,
             "fear_greed_index": fear_greed,
             "symbols": symbols_data,
             "upcoming_macro_events": upcoming_macro_events,
         }
+
+        # Mark staleness when outside US market hours (Mon-Fri 9:30-16:00 ET)
+        now_et = datetime.now(ZoneInfo("America/New_York"))
+        market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+        if now_et.weekday() >= 5 or now_et < market_open or now_et > market_close:
+            result["staleness"] = "off_hours"
+
+        return result
