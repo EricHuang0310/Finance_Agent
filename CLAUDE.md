@@ -74,7 +74,7 @@ src/
 ├── alpaca_client.py             # Alpaca API wrapper (data + orders)
 ├── analysis/
 │   ├── technical.py             # TechnicalAnalyzer — RSI, MACD, BB, EMA, ATR
-│   ├── sentiment.py             # SentimentAnalyzer — VADER NLP + news
+│   ├── sentiment.py             # SentimentAnalyzer — VADER NLP + news + earnings imminence + staleness
 │   ├── screener.py              # SymbolScreener — dynamic watchlist
 │   ├── position_reviewer.py     # PositionReviewer — 4-factor exit scoring
 │   └── fundamentals.py          # FundamentalsAnalyzer — yfinance data

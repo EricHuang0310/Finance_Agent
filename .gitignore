@@ -13,3 +13,9 @@ shared_state/
 __pycache__/
 *.pyc
 /Users/tinglianghuang/Documents/Finace_Agent_Team/src/__pycache__/
+
+node_modules/
+create_presentation.js
+Multi_Agent_Trading_System.pptx
+package-lock.json
+package.json

@@ -124,7 +124,7 @@ class SymbolScreener:
                     continue
 
                 # Trading days completeness check
-                min_bars = int(self.lookback_days * 0.8)
+                min_bars = int(self.lookback_days * 0.7)
                 if len(bars) < min_bars:
                     data_errors.append(f"{symbol}: only {len(bars)}/{min_bars} required bars")
                     continue

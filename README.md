@@ -103,7 +103,7 @@ src/
   analysis/
     screener.py             # Symbol screener (Phase 0)
     technical.py            # Technical indicators & momentum scoring
-    sentiment.py            # News sentiment analysis (VADER)
+    sentiment.py            # News sentiment (VADER + catalysts + earnings imminence)
     fundamentals.py         # Fundamental data via yfinance
     position_reviewer.py    # Existing position exit evaluation
   risk/

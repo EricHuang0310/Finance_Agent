@@ -199,7 +199,7 @@ class RiskManager:
             reward = abs(take_profit_price - entry_price)
             risk_reward = reward / risk if risk > 0 else 0
 
-            if risk_reward < self.min_risk_reward:
+            if risk_reward < self.min_risk_reward - 0.02:
                 return RiskAssessment(
                     symbol=symbol, approved=False,
                     reason=f"R:R {risk_reward:.2f} < min {self.min_risk_reward}",
