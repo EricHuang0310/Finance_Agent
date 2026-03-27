@@ -1,21 +1,32 @@
-.env
-.claude/
-# ignore data folder
-data/
-
-# ignore logs
-logs/
-
-# ignore shared state
-shared_state/
-
-# ignore python cache
+# Python
 __pycache__/
-*.pyc
-/Users/tinglianghuang/Documents/Finace_Agent_Team/src/__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.venv/
+venv/
 
+# Environment & Secrets (CRITICAL - contains API keys)
+.env
+config/.env
+
+# macOS
+.DS_Store
+
+# Node (presentation generation)
 node_modules/
-create_presentation.js
-Multi_Agent_Trading_System.pptx
 package-lock.json
 package.json
+create_presentation.js
+*.pptx
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Runtime data (regenerated each run)
+shared_state/
+logs/
+data/
+
+# Memory store (learned lessons, local to each instance)
+memory_store/

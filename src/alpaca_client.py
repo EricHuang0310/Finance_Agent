@@ -154,6 +154,24 @@ class AlpacaClient:
         order = self.trading_client.submit_order(request)
         return {"id": str(order.id), "status": order.status.value}
 
+    def close_position(self, symbol: str) -> dict:
+        """Close an entire position using Alpaca's close_position endpoint.
+
+        This is the preferred way to close positions as it handles
+        qty/side automatically and cancels any pending orders for the symbol.
+        """
+        try:
+            # Cancel any open orders for this symbol first
+            self.trading_client.cancel_orders_for_symbol(symbol)
+        except Exception:
+            pass  # No open orders, or API doesn't support — continue
+
+        try:
+            order = self.trading_client.close_position(symbol)
+            return {"id": str(order.id), "status": order.status.value}
+        except Exception as e:
+            raise RuntimeError(f"Failed to close {symbol}: {e}")
+
     # ──────────────────────────────────────────────
     # Market Screener (dynamic discovery)
     # ──────────────────────────────────────────────

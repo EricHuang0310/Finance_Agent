@@ -536,6 +536,9 @@ class TradingOrchestrator:
                 regime_conflict=candidate.get("regime_conflict", False),
                 atr_pct=candidate.get("atr_pct", 0),
                 sector=candidate.get("sector", "unknown"),
+                adx=candidate.get("adx", 0),
+                high_90d=candidate.get("high_90d", 0),
+                low_90d=candidate.get("low_90d", 0),
             )
 
             candidate["risk_assessment"] = assessment.to_dict()
@@ -699,6 +702,9 @@ class TradingOrchestrator:
                     "regime_confidence": regime_confidence,
                     "sector": sector,
                     "atr_pct": round(atr_pct, 4),
+                    "adx": signal.get("adx", 0),
+                    "high_90d": signal.get("high_90d", 0),
+                    "low_90d": signal.get("low_90d", 0),
                 }
             else:
                 skipped_symbols[symbol] = f"composite={composite:.3f} below threshold"

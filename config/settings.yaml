@@ -90,6 +90,35 @@ position_exit:
   exit_threshold: 0.5         # Min exit_score to trigger close (0.0 - 1.0)
   atr_multiplier: 2.0         # Trailing stop = recent_high - multiplier * ATR
   trailing_lookback_bars: 10   # Bars to look back for recent high/low
+  # --- Hard stop rules (professional desk practices) ---
+  breakeven_atr_trigger: 1.0       # After gaining >= 1 ATR, move stop to entry; exit if retraces to entry
+  profit_lock_atr_trigger: 2.0     # After gaining >= 2 ATR, start trailing profit lock
+  profit_lock_trail_atr: 1.5       # Trail stop at high_water_mark - 1.5 * ATR
+  giveback_threshold: 0.50         # Exit if given back >= 50% of peak unrealized PnL
+  giveback_min_peak_pct: 0.03      # Only apply give-back rule if peak PnL was >= 3%
+  time_stop_days: 5                # Days of no favorable move to increase exit pressure
+  time_stop_flat_atr: 0.5          # "No favorable move" = less than 0.5 ATR gain in N days
+  # --- ATR Gradient Trailing Stop tiers ---
+  atr_gradient:
+    - { trigger: 2.0,  lock: 0.75 }
+    - { trigger: 3.0,  lock: 1.5 }
+    - { trigger: 5.0,  lock: 3.0 }
+    - { trigger: 10.0, lock: 7.0 }
+    - { trigger: 15.0, lock: 12.0 }
+  # --- Partial close settings ---
+  partial_close_enabled: true
+  partial_close_high_vol_atr: 2.0    # High-vol stocks: partial at 2 ATR
+  partial_close_high_vol_pct: 0.50   # Close 50%
+  partial_close_standard_atr: 4.0    # Standard: partial at 4 ATR
+  partial_close_standard_pct: 0.25   # Close 25%
+  partial_close_bank_atr: 2.0        # Banks: partial at 2 ATR
+  partial_close_bank_pct: 0.50       # Close 50%
+
+# Entry quality filters (applied in Risk Manager)
+entry_filters:
+  min_adx: 15                    # Reject momentum trades if ADX < 15
+  near_90d_high_pct: 0.02       # Within 2% of 90d high -> reduce qty 50% for buys
+  near_90d_low_pct: 0.02        # Within 2% of 90d low -> reduce qty 50% for shorts
 
 # Debate settings (Agent Teams mode only — skipped in standalone mode)
 debate:
