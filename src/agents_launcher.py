@@ -125,14 +125,11 @@ def task_execute_exits(exit_candidates: list[dict]) -> list[dict]:
     executed_exits = []
     for candidate in exit_candidates:
         try:
-            close_side = "sell" if candidate["side"] == "long" else "buy"
             print(f"  📤 Closing {candidate['symbol']} ({candidate['side']}): "
-                  f"qty={candidate['qty']} @ ~${candidate['current_price']:.2f}")
+                  f"qty={abs(candidate['qty'])} @ ~${candidate['current_price']:.2f}")
 
-            result = orch.client.place_market_order(
+            result = orch.client.close_position(
                 symbol=candidate["symbol"],
-                qty=candidate["qty"],
-                side=close_side,
             )
             candidate["order_id"] = result["id"]
             candidate["order_status"] = result["status"]
@@ -156,8 +153,8 @@ def task_execute_exits(exit_candidates: list[dict]) -> list[dict]:
             # Log trade
             orch._log_trade({
                 "symbol": candidate["symbol"],
-                "side": close_side,
-                "suggested_qty": candidate["qty"],
+                "side": "sell" if candidate["side"] == "long" else "buy",
+                "suggested_qty": abs(candidate["qty"]),
                 "entry_price": candidate["current_price"],
                 "composite_score": candidate.get("exit_score", 0),
                 "action": "close_position",

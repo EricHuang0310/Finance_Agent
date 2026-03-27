@@ -39,6 +39,12 @@ class RiskManager:
         self.max_sector_pct = risk_cfg.get("max_sector_pct", 30) / 100
         self.max_same_sector_same_direction = risk_cfg.get("max_same_sector_same_direction", 3)
 
+        # Entry quality filters
+        entry_cfg = config.get("entry_filters", {})
+        self.min_adx = entry_cfg.get("min_adx", 15)
+        self.near_90d_high_pct = entry_cfg.get("near_90d_high_pct", 0.02)
+        self.near_90d_low_pct = entry_cfg.get("near_90d_low_pct", 0.02)
+
         self.equity = 0.0
         self.cash = 0.0
         self.positions = []
@@ -102,6 +108,9 @@ class RiskManager:
         regime_conflict: bool = False,
         atr_pct: float = 0,
         sector: str = "unknown",
+        adx: float = 0,
+        high_90d: float = 0,
+        low_90d: float = 0,
     ) -> RiskAssessment:
         """Assess whether a trade meets risk constraints."""
         sizing_adjustments = []
@@ -192,6 +201,15 @@ class RiskManager:
                 sector=sector,
             )
 
+        # ADX trend strength filter
+        if adx > 0 and adx < self.min_adx:
+            return RiskAssessment(
+                symbol=symbol, approved=False,
+                reason=f"ADX {adx:.1f} < {self.min_adx}: no trend detected, momentum trade rejected",
+                suggested_qty=0, risk_reward_ratio=0, position_size_pct=0,
+                sector=sector,
+            )
+
         # Risk-reward ratio
         risk_reward = 0.0
         if stop_loss_price and take_profit_price and entry_price:
@@ -234,6 +252,20 @@ class RiskManager:
             adjusted = max(1, int(suggested_qty * 0.7))
             sizing_adjustments.append(f"elevated_volatility(ATR/P={atr_pct*100:.1f}%): {suggested_qty} → {adjusted}")
             suggested_qty = adjusted
+
+        # 90-day high/low proximity sizing adjustment
+        if side == "buy" and high_90d > 0 and entry_price > 0 and suggested_qty > 0:
+            distance_to_high_pct = (high_90d - entry_price) / high_90d
+            if distance_to_high_pct < self.near_90d_high_pct:
+                adjusted = max(1, int(suggested_qty * 0.5))
+                sizing_adjustments.append(f"near_90d_high({distance_to_high_pct*100:.1f}%): {suggested_qty} → {adjusted}")
+                suggested_qty = adjusted
+        elif side == "sell" and low_90d > 0 and entry_price > 0 and suggested_qty > 0:
+            distance_to_low_pct = (entry_price - low_90d) / low_90d
+            if distance_to_low_pct < self.near_90d_low_pct:
+                adjusted = max(1, int(suggested_qty * 0.5))
+                sizing_adjustments.append(f"near_90d_low({distance_to_low_pct*100:.1f}%): {suggested_qty} → {adjusted}")
+                suggested_qty = adjusted
 
         position_size_pct = (suggested_qty * entry_price / self.equity * 100) if self.equity > 0 else 0
 
