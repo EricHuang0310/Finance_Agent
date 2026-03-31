@@ -8,3 +8,4 @@ vaderSentiment>=3.3.2
 rank_bm25>=0.2.2
 yfinance>=0.2.36
 ta>=0.11.0
+filelock>=3.0.0

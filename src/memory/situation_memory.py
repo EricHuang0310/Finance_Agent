@@ -6,6 +6,8 @@ similarity matching — no API calls, no embeddings, works fully offline.
 
 import json
 import re
+import shutil
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -116,8 +118,14 @@ class SituationMemory:
             self.documents = [e["situation"] for e in data.get("entries", [])]
             self.lessons = [e["lesson"] for e in data.get("entries", [])]
             self._rebuild_index()
-        except (json.JSONDecodeError, KeyError):
-            pass  # Corrupted file — start fresh
+        except (json.JSONDecodeError, KeyError) as e:
+            backup_path = path.with_suffix(f".corrupted.{int(time.time())}.json")
+            shutil.copy2(path, backup_path)
+            print(f"  WARNING: Memory bank '{self.name}' corrupted: {e}")
+            print(f"  Backed up to {backup_path}. Starting fresh.")
+            self.documents = []
+            self.lessons = []
+            self.bm25 = None
 
     def clear(self):
         """Clear all stored memories."""
