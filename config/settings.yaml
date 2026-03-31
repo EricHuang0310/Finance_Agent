@@ -130,3 +130,64 @@ memory:
   storage_dir: memory_store   # Directory for memory JSON files
   max_memories: 500           # Max entries per memory bank before pruning
 
+# ══════════════════════════════════════════════
+# Strategic Oversight Configuration
+# ══════════════════════════════════════════════
+
+cio:
+  # Stance triggers (quantitative thresholds)
+  vix_defensive_threshold: 30      # VIX above this = consider defensive
+  vix_aggressive_threshold: 18     # VIX below this = consider aggressive
+  # Risk budget multipliers per stance
+  aggressive_multiplier: 1.3
+  neutral_multiplier: 1.0
+  defensive_multiplier: 0.6
+  # Halt trading conditions
+  halt_on_vix_above: 40            # Emergency halt threshold
+
+macro:
+  # Cross-asset tickers
+  vix_ticker: "^VIX"
+  tlt_ticker: "TLT"
+  uup_ticker: "UUP"
+  yield_10y_ticker: "^TNX"
+  yield_3m_ticker: "^IRX"
+  # Data lookback
+  trend_lookback_days: 20
+  sma_short: 5
+  sma_long: 20
+
+eod_review:
+  # Confidence decay for historical EOD insights
+  decay_weights:
+    1: 1.0    # yesterday
+    2: 0.5    # 2 days ago
+    3: 0.25   # 3 days ago
+  max_lookback_days: 3
+  # Thesis drift detection
+  drift_rsi_threshold: 15          # RSI change from entry exceeding this flags drift
+  drift_price_reversal_pct: 5      # Price reversal from entry exceeding this flags drift
+
+# Model tier assignments (TEAMS-03)
+model_tiers:
+  # Strategic (CIO is Lead agent, uses default model)
+  macro-strategist: sonnet
+  eod-review: sonnet
+  # Analysts
+  symbol-screener: haiku
+  market-analyst: haiku
+  technical-analyst: haiku
+  sentiment-analyst: haiku
+  fundamentals-analyst: haiku
+  # Debate
+  bull-researcher: sonnet
+  bear-researcher: sonnet
+  research-judge: opus
+  # Risk + Execution
+  risk-manager: haiku
+  executor: haiku
+  position-reviewer: haiku
+  # Post-trade
+  reporter: haiku
+  reflection-analyst: opus
+
