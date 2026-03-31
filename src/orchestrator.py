@@ -26,7 +26,9 @@ from src.analysis.position_reviewer import PositionReviewer
 from src.analysis.fundamentals import FundamentalsAnalyzer
 from src.risk.manager import RiskManager
 from src.notifications.telegram import TelegramNotifier
+from filelock import FileLock
 from src.memory.situation_memory import SituationMemory
+from src.utils.state_io import save_state_atomic
 
 # yfinance for VIX data (optional, already used by fundamentals)
 try:
@@ -975,36 +977,37 @@ class TradingOrchestrator:
         return bars
 
     def _save_state(self, filename: str, data: dict):
-        """Save data to shared state directory."""
+        """Save data to shared state directory using atomic write."""
         path = self.state_dir / filename
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2, default=str)
+        save_state_atomic(path, data)
 
     def _log_trade(self, trade: dict, result: dict):
-        """Append trade to trade log."""
+        """Append trade to trade log with file locking for concurrent safety."""
         log_path = self.log_dir / "trade_log.json"
-        logs = []
-        if log_path.exists():
-            with open(log_path) as f:
-                logs = json.load(f)
+        lock_path = self.log_dir / "trade_log.json.lock"
 
-        logs.append({
-            "timestamp": datetime.now().isoformat(),
-            "symbol": trade["symbol"],
-            "side": trade["side"],
-            "qty": trade["suggested_qty"],
-            "entry_price": trade["entry_price"],
-            "stop_loss": trade.get("stop_loss"),
-            "take_profit": trade.get("take_profit"),
-            "score": trade["composite_score"],
-            "order_id": result["id"],
-            "order_status": result["status"],
-            "estimated_slippage_bps": trade.get("estimated_slippage_bps"),
-            "market_session": trade.get("market_session"),
-        })
+        with FileLock(lock_path, timeout=10):
+            logs = []
+            if log_path.exists():
+                with open(log_path) as f:
+                    logs = json.load(f)
 
-        with open(log_path, "w") as f:
-            json.dump(logs, f, indent=2, default=str)
+            logs.append({
+                "timestamp": datetime.now().isoformat(),
+                "symbol": trade["symbol"],
+                "side": trade["side"],
+                "qty": trade["suggested_qty"],
+                "entry_price": trade["entry_price"],
+                "stop_loss": trade.get("stop_loss"),
+                "take_profit": trade.get("take_profit"),
+                "score": trade["composite_score"],
+                "order_id": result["id"],
+                "order_status": result["status"],
+                "estimated_slippage_bps": trade.get("estimated_slippage_bps"),
+                "market_session": trade.get("market_session"),
+            })
+
+            save_state_atomic(log_path, logs)
 
 
 # ══════════════════════════════════════════════
