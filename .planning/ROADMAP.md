@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Memory corruption no longer fails silently (errors are reported), and concurrent Agent Teams execution does not corrupt the trade log
 **Plans:** 7 plans
 Plans:
-- [ ] 01-01-PLAN.md — Memory fixes (MEM-01, MEM-04) + atomic write utility
+- [x] 01-01-PLAN.md — Memory fixes (MEM-01, MEM-04) + atomic write utility
 - [ ] 01-02-PLAN.md — Strategic role agent specs + model tiers + settings config
 - [ ] 01-03-PLAN.md — Macro Strategist + CIO task functions
 - [ ] 01-04-PLAN.md — EOD Review task function + confidence decay
@@ -66,6 +66,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Strategic Oversight & Agent Teams Foundation | 0/7 | Planned | - |
+| 1. Strategic Oversight & Agent Teams Foundation | 1/7 | In Progress | - |
 | 2. Portfolio Intelligence | 0/TBD | Not started | - |
 | 3. Debate & Execution Enhancement | 0/TBD | Not started | - |
