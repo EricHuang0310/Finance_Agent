@@ -86,34 +86,34 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TEAMS-01 | TBD | Pending |
-| TEAMS-02 | TBD | Pending |
-| TEAMS-03 | TBD | Pending |
-| TEAMS-04 | TBD | Pending |
-| TEAMS-05 | TBD | Pending |
-| CIO-01 | TBD | Pending |
-| CIO-02 | TBD | Pending |
-| CIO-03 | TBD | Pending |
-| MACRO-01 | TBD | Pending |
-| MACRO-02 | TBD | Pending |
-| MACRO-03 | TBD | Pending |
-| PORT-01 | TBD | Pending |
-| PORT-02 | TBD | Pending |
-| PORT-03 | TBD | Pending |
-| EOD-01 | TBD | Pending |
-| EOD-02 | TBD | Pending |
-| EOD-03 | TBD | Pending |
-| SECT-01 | TBD | Pending |
-| SECT-02 | TBD | Pending |
-| SECT-03 | TBD | Pending |
-| EXEC-01 | TBD | Pending |
-| EXEC-02 | TBD | Pending |
-| EXEC-03 | TBD | Pending |
-| MEM-01 | TBD | Pending |
-| MEM-02 | TBD | Pending |
-| MEM-03 | TBD | Pending |
-| MEM-04 | TBD | Pending |
-| MEM-05 | TBD | Pending |
+| TEAMS-01 | Phase 1 | Pending |
+| TEAMS-02 | Phase 1 | Pending |
+| TEAMS-03 | Phase 1 | Pending |
+| TEAMS-04 | Phase 1 | Pending |
+| TEAMS-05 | Phase 1 | Pending |
+| CIO-01 | Phase 1 | Pending |
+| CIO-02 | Phase 1 | Pending |
+| CIO-03 | Phase 1 | Pending |
+| MACRO-01 | Phase 1 | Pending |
+| MACRO-02 | Phase 1 | Pending |
+| MACRO-03 | Phase 1 | Pending |
+| PORT-01 | Phase 2 | Pending |
+| PORT-02 | Phase 2 | Pending |
+| PORT-03 | Phase 2 | Pending |
+| EOD-01 | Phase 1 | Pending |
+| EOD-02 | Phase 1 | Pending |
+| EOD-03 | Phase 1 | Pending |
+| SECT-01 | Phase 3 | Pending |
+| SECT-02 | Phase 3 | Pending |
+| SECT-03 | Phase 3 | Pending |
+| EXEC-01 | Phase 3 | Pending |
+| EXEC-02 | Phase 3 | Pending |
+| EXEC-03 | Phase 3 | Pending |
+| MEM-01 | Phase 1 | Pending |
+| MEM-02 | Phase 2 | Pending |
+| MEM-03 | Phase 3 | Pending |
+| MEM-04 | Phase 1 | Pending |
+| MEM-05 | Phase 1 | Pending |
 
 ---
 *Defined: 2026-03-31 from research + user scoping*
