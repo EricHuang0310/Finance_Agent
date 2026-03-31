@@ -552,7 +552,7 @@ class TradingOrchestrator:
         self._save_state("risk_assessment.json", {
             "timestamp": datetime.now().isoformat(),
             "summary": summary,
-            "assessments": [c["risk_assessment"] for c in assessed],
+            "assessments": assessed,
         })
 
         return assessed
