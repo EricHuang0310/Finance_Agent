@@ -216,6 +216,24 @@ class AlpacaClient:
     # Order Placement
     # ──────────────────────────────────────────────
 
+    def place_limit_order(
+        self, symbol: str, qty: float, limit_price: float, side: str = "buy"
+    ) -> dict:
+        """Place a limit order with DAY time-in-force."""
+        from alpaca.trading.requests import LimitOrderRequest
+        from alpaca.trading.enums import OrderSide, TimeInForce
+
+        order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
+        request = LimitOrderRequest(
+            symbol=symbol,
+            qty=qty,
+            side=order_side,
+            limit_price=limit_price,
+            time_in_force=TimeInForce.DAY,
+        )
+        order = self.trading_client.submit_order(request)
+        return {"id": str(order.id), "status": order.status.value}
+
     def place_bracket_order(
         self,
         symbol: str,

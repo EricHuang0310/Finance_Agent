@@ -138,6 +138,15 @@ sector_specialist:
     - fundamentals    # PE, revenue growth from fundamentals_signals.json
     - technical       # Relative strength from technical_signals.json
 
+# Execution Strategist configuration (EXEC-01/02/03)
+execution_strategist:
+  enabled: true
+  default_order_type: bracket     # Fallback when no plan exists
+  volume_impact_threshold: 0.05   # Use limit order above this
+  high_atr_threshold: 0.03        # ATR% above which to widen stops
+  low_atr_threshold: 0.01         # ATR% below which market orders OK
+  limit_offset_bps: 10            # Basis points offset for limit orders
+
 # ══════════════════════════════════════════════
 # Strategic Oversight Configuration
 # ══════════════════════════════════════════════
