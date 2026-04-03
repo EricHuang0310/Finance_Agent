@@ -130,6 +130,14 @@ memory:
   storage_dir: memory_store   # Directory for memory JSON files
   max_memories: 500           # Max entries per memory bank before pruning
 
+# Sector Specialist configuration (SECT-01/02/03)
+sector_specialist:
+  enabled: true
+  data_sources:
+    - yfinance        # Sector/industry from Ticker.info
+    - fundamentals    # PE, revenue growth from fundamentals_signals.json
+    - technical       # Relative strength from technical_signals.json
+
 # ══════════════════════════════════════════════
 # Strategic Oversight Configuration
 # ══════════════════════════════════════════════

@@ -12,6 +12,13 @@ from pathlib import Path
 
 from src.state_dir import get_state_dir
 
+# yfinance is optional; Sector Specialist enrichment degrades gracefully without it.
+try:
+    import yfinance as yf
+    _HAS_YFINANCE = True
+except ImportError:
+    _HAS_YFINANCE = False
+
 
 def _get_state_dir() -> Path:
     return get_state_dir()
@@ -30,6 +37,111 @@ class _LazyStateDir:
         return str(_get_state_dir())
 
 STATE_DIR = _LazyStateDir()
+
+
+def _fetch_sector_intelligence(symbol: str, context: dict) -> dict:
+    """Fetch sector-specific intelligence for debate enrichment (SECT-01/02).
+
+    Returns a dict with sector, industry, supply chain, rotation, and
+    competitive landscape data.  On any failure the dict contains an
+    ``error`` key so callers can degrade gracefully (D-12).
+    """
+    state_dir = _get_state_dir()
+
+    # Check for pre-computed result from task_sector_specialist
+    cached_path = state_dir / f"sector_intelligence_{symbol}.json"
+    if cached_path.exists():
+        try:
+            with open(cached_path) as f:
+                return json.load(f)
+        except Exception:
+            pass  # Fall through to re-fetch
+
+    try:
+        intelligence: dict = {"symbol": symbol}
+
+        # --- Core sector/industry from yfinance ---
+        if _HAS_YFINANCE:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info or {}
+            intelligence["sector"] = info.get("sector", "Unknown")
+            intelligence["industry"] = info.get("industry", "Unknown")
+            intelligence["market_cap"] = info.get("marketCap")
+        else:
+            intelligence["sector"] = "Unknown"
+            intelligence["industry"] = "Unknown"
+            intelligence["market_cap"] = None
+
+        # --- Competitive landscape from fundamentals_signals.json ---
+        fund_path = state_dir / "fundamentals_signals.json"
+        pe_ratio = None
+        revenue_growth = None
+        if fund_path.exists():
+            with open(fund_path) as f:
+                fund_data = json.load(f)
+            fund_sig = fund_data.get("signals", {}).get(symbol, {})
+            if isinstance(fund_sig, dict):
+                pe_ratio = fund_sig.get("pe_ratio")
+                revenue_growth = fund_sig.get("revenue_growth")
+
+        intelligence["competitive_landscape"] = {
+            "pe_ratio": pe_ratio,
+            "revenue_growth": revenue_growth,
+            "peer_context": (
+                f"{symbol} PE={pe_ratio}, revenue_growth={revenue_growth}"
+                if pe_ratio is not None
+                else "Peer data not available from fundamentals"
+            ),
+        }
+
+        # --- Sector rotation from technical_signals.json ---
+        sector_momentum = "Data not available"
+        relative_strength = None
+        tech_path = state_dir / "technical_signals.json"
+        if tech_path.exists():
+            with open(tech_path) as f:
+                tech_data = json.load(f)
+            sym_tech = tech_data.get("stocks", {}).get(symbol, {})
+            trend = sym_tech.get("trend", "unknown")
+            score = sym_tech.get("score")
+            sector_momentum = (
+                f"{symbol} trend={trend}, tech_score={score}"
+                if score is not None
+                else f"{symbol} trend={trend}"
+            )
+            relative_strength = score
+
+        intelligence["sector_rotation"] = {
+            "sector_momentum": sector_momentum,
+            "relative_strength": relative_strength,
+        }
+
+        # --- Supply chain context (LLM training knowledge fills gaps) ---
+        market_regime = "unknown"
+        mkt_path = state_dir / "market_overview.json"
+        if mkt_path.exists():
+            with open(mkt_path) as f:
+                mkt_data = json.load(f)
+            regime_data = mkt_data.get("market_regime", {})
+            if isinstance(regime_data, dict):
+                market_regime = regime_data.get("regime", "transitional")
+            elif regime_data:
+                market_regime = str(regime_data)
+
+        intelligence["supply_chain"] = {
+            "key_context": (
+                f"Sector={intelligence['sector']}, "
+                f"Industry={intelligence['industry']}, "
+                f"Market regime={market_regime}. "
+                "LLM training knowledge should fill supply chain specifics."
+            ),
+            "demand_signals": None,
+        }
+
+        return intelligence
+
+    except Exception as e:
+        return {"symbol": symbol, "error": str(e)}
 
 
 def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
@@ -78,6 +190,9 @@ def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
         with open(fund_path) as f:
             fund_data = json.load(f)
         context["fundamentals"] = fund_data.get("signals", {}).get(symbol)
+
+    # Enrich with sector intelligence (SECT-01/02)
+    context["sector_intelligence"] = _fetch_sector_intelligence(symbol, context)
 
     # Load decision (composite score + side)
     dec_path = STATE_DIR / "decisions.json"
