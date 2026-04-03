@@ -157,6 +157,13 @@ merged = task_merge_debates(candidates)
   Portfolio Strategist 失敗 **不是** 硬停止 -- 繼續使用 risk-assessed trades (D-12)
   完成後關閉此 teammate。
 
+- Execution Strategist (Lead直接執行):
+  `from src.execution.strategist import task_execution_strategist; assessed = task_execution_strategist(assessed)`
+  讀取: `technical_signals.json`, `market_overview.json`
+  寫入: `{state_dir}/execution_plan.json`
+  根據波動率和流動性為每筆交易推薦訂單類型 (market/limit/bracket)。
+  Execution Strategist 失敗 **不是** 硬停止 -- Executor 使用預設 bracket 訂單 (D-12)
+
 {"- Executor (model: " + model_tiers.get('executor', 'haiku') + "):" if execute else "- [執行已跳過 -- 分析模式]"}
 {"  `from src.agents_launcher import task_execute_trades, task_execute_exits; task_execute_exits(exit_candidates); task_execute_trades(assessed)`" if execute else ""}
 {"  完成後關閉此 teammate。" if execute else ""}

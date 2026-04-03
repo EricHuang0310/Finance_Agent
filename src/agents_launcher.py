@@ -569,7 +569,12 @@ def task_generate_decisions(tech_signals: dict, sentiment: dict, market_data: di
 
 
 def task_execute_trades(assessed: list[dict]) -> list[dict]:
-    """Task for Executor agent. Places orders for approved trades."""
+    """Task for Executor agent. Places orders for approved trades.
+
+    Reads execution_plan.json (if present) to dispatch the recommended
+    order type (market, limit, or bracket) per trade. Falls back to
+    bracket/market when no plan exists (D-12 graceful degradation).
+    """
     print("⚡ [Executor] Starting order execution...")
     orch = get_orchestrator()
     notifier = TelegramNotifier()
@@ -580,6 +585,19 @@ def task_execute_trades(assessed: list[dict]) -> list[dict]:
     if not approved:
         print("⚡ [Executor] 📭 No approved trades to execute.")
         return []
+
+    # Load execution plan if available (EXEC-02)
+    exec_plan = {}
+    exec_plan_path = get_state_dir() / "execution_plan.json"
+    if exec_plan_path.exists():
+        try:
+            with open(exec_plan_path, "r", encoding="utf-8") as f:
+                exec_plan_data = json.load(f)
+            for p in exec_plan_data.get("plans", []):
+                exec_plan[p["symbol"]] = p
+            print(f"  📊 Execution plan loaded: {len(exec_plan)} trade recommendations")
+        except Exception as e:
+            print(f"  ⚠️  Failed to load execution plan: {e}. Using default order types.")
 
     # Market hours check
     try:
@@ -596,20 +614,48 @@ def task_execute_trades(assessed: list[dict]) -> list[dict]:
             print(f"  📋 Placing order: {side_emoji} {trade['symbol']} "
                   f"x{trade['suggested_qty']} {entry_str}")
 
-            if trade.get("stop_loss") and trade.get("take_profit"):
-                result = orch.client.place_bracket_order(
+            # Determine order type from execution plan (EXEC-01/02)
+            plan = exec_plan.get(trade["symbol"], {})
+            order_type = plan.get("order_type", "bracket")  # Default: bracket
+
+            if order_type == "limit" and plan.get("limit_price"):
+                print(f"  📋 Order type: limit @ ${plan['limit_price']:.2f}")
+                result = orch.client.place_limit_order(
                     symbol=trade["symbol"],
                     qty=trade["suggested_qty"],
+                    limit_price=plan["limit_price"],
                     side=trade["side"],
-                    stop_loss_price=trade["stop_loss"],
-                    take_profit_price=trade["take_profit"],
                 )
-            else:
+            elif order_type == "market":
+                print(f"  📋 Order type: market")
                 result = orch.client.place_market_order(
                     symbol=trade["symbol"],
                     qty=trade["suggested_qty"],
                     side=trade["side"],
                 )
+            else:
+                # Default: bracket (existing behavior) or fallback from limit without price
+                order_type = "bracket"
+                if trade.get("stop_loss") and trade.get("take_profit"):
+                    print(f"  📋 Order type: bracket")
+                    result = orch.client.place_bracket_order(
+                        symbol=trade["symbol"],
+                        qty=trade["suggested_qty"],
+                        side=trade["side"],
+                        stop_loss_price=trade["stop_loss"],
+                        take_profit_price=trade["take_profit"],
+                    )
+                else:
+                    order_type = "market"
+                    print(f"  📋 Order type: market (no SL/TP for bracket)")
+                    result = orch.client.place_market_order(
+                        symbol=trade["symbol"],
+                        qty=trade["suggested_qty"],
+                        side=trade["side"],
+                    )
+
+            # Track order type used for fill quality (EXEC-03)
+            trade["order_type_used"] = order_type
 
             trade["order_id"] = result["id"]
             trade["order_status"] = result["status"]
@@ -1103,6 +1149,13 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
     except Exception as e:
         # Graceful degradation per D-12: non-critical failure
         print(f"  ⚠️ Warning: Portfolio Strategist failed: {e}. Proceeding with risk-assessed trades.")
+
+    # Phase 3.5b: Execution Strategy (EXEC-01/02)
+    try:
+        from src.execution.strategist import task_execution_strategist
+        assessed = task_execution_strategist(assessed)
+    except Exception as e:
+        print(f"  ⚠️  Execution Strategist failed (using default orders): {e}")
 
     # Re-derive approved/rejected after portfolio strategist adjustment
     approved = [t for t in assessed if t.get("approved")]

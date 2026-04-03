@@ -55,6 +55,8 @@ def journal_on_fill(trade: dict, order_result: dict) -> None:
         "stop_loss": stop_loss,
         "take_profit": trade.get("take_profit"),
         "initial_risk": initial_risk,
+        "order_type_used": trade.get("order_type_used", "bracket"),
+        "estimated_fill_price": trade.get("entry_price"),
         "entry_thesis": {
             "composite_score": trade.get("composite_score"),
             "sector": trade.get("sector"),

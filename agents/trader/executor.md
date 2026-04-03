@@ -78,6 +78,20 @@ actual_slippage_bps = abs(fill_price - entry_price) / entry_price × 10000
     │   └─ NO → 進入正常下單流程
 ```
 
+## 執行計畫 (Execution Plan -- EXEC-01/02)
+
+如果 `{state_dir}/execution_plan.json` 存在，Executor 會讀取其中的訂單類型建議：
+
+| 訂單類型 | 條件 | 說明 |
+|---------|------|------|
+| `limit` | volume_impact >= 5% | 限價單，控制滑價。limit_price 由 Execution Strategist 計算 |
+| `market` | 低波動 + 極高流動性 | 市價單，立即成交 |
+| `bracket` | 預設 / 高波動 | Bracket 單（含 SL/TP），現有行為 |
+
+如果 `execution_plan.json` 不存在或讀取失敗，**回退到現有的 bracket/market 邏輯**（D-12 容錯降級）。
+
+每筆交易的 `order_type_used` 會記錄到 trade journal，供事後分析填充品質。
+
 ## 正常下單流程
 ```
 assessed trades (from Risk Manager)
