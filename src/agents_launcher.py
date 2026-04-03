@@ -19,6 +19,7 @@ from pathlib import Path
 import yfinance as yf
 
 from src.utils.state_io import save_state_atomic
+from src.analysis.technical import TechnicalAnalyzer
 
 # Ensure project root is in path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -514,6 +515,213 @@ def task_save_reflection_results(trade_id: str) -> bool:
     else:
         print(f"💾 [Reflection Save] ⚠️  No reflection result found for {trade_id}")
     return success
+
+
+# ══════════════════════════════════════════════
+# EOD Review Task Function
+# Produces eod_review.json with P&L attribution,
+# thesis drift detection, and observation-framed insights
+# ══════════════════════════════════════════════
+
+def task_eod_review() -> dict:
+    """Produce eod_review.json with P&L attribution and thesis drift detection.
+
+    EOD-01: P&L attribution for all open positions.
+    EOD-02: Thesis drift -- compare entry signals vs current state.
+    EOD-03: confidence_weight=1.0 for today (decay applied by reader).
+
+    Output is OBSERVATIONS not directives (Research pitfall 4 prevention).
+    """
+    orch = get_orchestrator()
+    state_dir = get_state_dir()
+    eod_cfg = orch.settings.get("eod_review", {})
+
+    print("\n" + "=" * 60)
+    print("  EOD Review - Daily Performance Attribution")
+    print("=" * 60)
+
+    client = AlpacaClient()
+
+    # Get current positions
+    try:
+        positions = client.get_positions()
+    except Exception as e:
+        print(f"  WARNING: Failed to get positions: {e}")
+        positions = []
+
+    # Get account for total P&L
+    try:
+        account = client.get_account()
+        equity = float(account.get("equity", 0))
+        last_equity = float(account.get("last_equity", 0))
+        total_pnl_today = round(equity - last_equity, 2)
+        total_pnl_pct = round((total_pnl_today / last_equity * 100) if last_equity else 0, 2)
+    except Exception as e:
+        print(f"  WARNING: Failed to get account: {e}")
+        total_pnl_today = 0
+        total_pnl_pct = 0
+
+    # Read today's trade log for entry context
+    trade_entries = {}
+    for candidate_path in [Path(state_dir) / "trade_log.json",
+                           Path(state_dir) / ".." / ".." / "logs" / "trade_log.json"]:
+        if candidate_path.exists():
+            try:
+                with open(candidate_path) as f:
+                    logs = json.load(f)
+                for log in logs:
+                    trade_entries[log.get("symbol", "")] = log
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+    # Review each position
+    position_reviews = []
+    thesis_drift_alerts = []
+    observations = []
+
+    drift_rsi_threshold = eod_cfg.get("drift_rsi_threshold", 15)
+    drift_price_pct = eod_cfg.get("drift_price_reversal_pct", 5)
+
+    for pos in positions:
+        symbol = pos.get("symbol", "")
+        try:
+            unrealized_pl = float(pos.get("unrealized_pl", 0))
+            unrealized_plpc = float(pos.get("unrealized_plpc", 0)) * 100
+            avg_entry = float(pos.get("avg_entry_price", 0))
+            current_price = float(pos.get("current_price", 0))
+            qty = float(pos.get("qty", 0))
+            side = pos.get("side", "long")
+
+            # Get current technical signals for drift detection
+            bars = orch._get_bars(symbol, "stock", lookback_days=30)
+            current_rsi = None
+            current_trend = "unknown"
+            if bars is not None and len(bars) > 14:
+                tech = TechnicalAnalyzer()
+                signal = tech.analyze(bars, symbol)
+                if signal:
+                    current_rsi = signal.rsi
+                    current_trend = (
+                        "bullish" if signal.score > 0.1
+                        else "bearish" if signal.score < -0.1
+                        else "neutral"
+                    )
+
+            # Check for thesis drift
+            entry_data = trade_entries.get(symbol, {})
+            entry_score = entry_data.get("score", None)
+            character_change = False
+            drift_notes = []
+
+            # Price reversal check
+            if avg_entry > 0 and current_price > 0:
+                price_change_pct = ((current_price - avg_entry) / avg_entry) * 100
+                if side == "long" and price_change_pct < -drift_price_pct:
+                    character_change = True
+                    drift_notes.append(f"Price reversed {price_change_pct:.1f}% from entry")
+
+            # RSI divergence check (if we have entry score and current RSI)
+            if current_rsi is not None and entry_score is not None:
+                # If entry was bullish but current RSI dropped significantly
+                if entry_score > 0.2 and current_rsi < 45:
+                    character_change = True
+                    drift_notes.append(
+                        f"RSI dropped to {current_rsi:.0f} (entry was bullish score={entry_score:.2f})"
+                    )
+
+            review = {
+                "symbol": symbol,
+                "qty": qty,
+                "side": side,
+                "avg_entry_price": avg_entry,
+                "current_price": current_price,
+                "pnl_today": round(unrealized_pl, 2),
+                "pnl_pct": round(unrealized_plpc, 2),
+                "thesis_status": "drift_detected" if character_change else "intact",
+                "character_change": character_change,
+                "current_trend": current_trend,
+                "notes": (
+                    "; ".join(drift_notes) if drift_notes
+                    else "Position characteristics unchanged"
+                ),
+            }
+            position_reviews.append(review)
+
+            if character_change:
+                thesis_drift_alerts.append({
+                    "symbol": symbol,
+                    "original_entry_score": entry_score,
+                    "current_status": "; ".join(drift_notes),
+                    "recommendation": "Monitor for exit signal",
+                })
+
+            drift_marker = " DRIFT" if character_change else " intact"
+            print(
+                f"  {symbol}: P&L={unrealized_pl:+.2f} ({unrealized_plpc:+.1f}%){drift_marker}"
+            )
+
+        except Exception as e:
+            print(f"  WARNING: Error reviewing {symbol}: {e}")
+            position_reviews.append({
+                "symbol": symbol,
+                "error": str(e),
+                "thesis_status": "unknown",
+                "character_change": False,
+            })
+
+    # Count today's trades
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    new_entries = sum(
+        1 for t in trade_entries.values()
+        if t.get("side") == "buy" and t.get("timestamp", "").startswith(today_str)
+    )
+    exits = sum(
+        1 for t in trade_entries.values()
+        if t.get("side") == "sell" and t.get("timestamp", "").startswith(today_str)
+    )
+
+    # Generate observations (NOT directives, per Research pitfall 4)
+    if total_pnl_today > 0:
+        observations.append(f"Portfolio gained ${total_pnl_today:.2f} ({total_pnl_pct:+.2f}%) today")
+    elif total_pnl_today < 0:
+        observations.append(f"Portfolio lost ${abs(total_pnl_today):.2f} ({total_pnl_pct:+.2f}%) today")
+    else:
+        observations.append("Portfolio flat today")
+
+    if thesis_drift_alerts:
+        observations.append(f"{len(thesis_drift_alerts)} position(s) showing thesis drift")
+
+    if len(positions) > 0:
+        winners = sum(1 for r in position_reviews if r.get("pnl_today", 0) > 0)
+        losers = sum(1 for r in position_reviews if r.get("pnl_today", 0) < 0)
+        observations.append(
+            f"Position performance: {winners} winning, {losers} losing out of {len(positions)}"
+        )
+
+    result = {
+        "date": today_str,
+        "timestamp": datetime.now().isoformat(),
+        "portfolio_summary": {
+            "total_pnl_today": total_pnl_today,
+            "total_pnl_pct": total_pnl_pct,
+            "positions_count": len(positions),
+            "new_entries": new_entries,
+            "exits": exits,
+        },
+        "position_reviews": position_reviews,
+        "thesis_drift_alerts": thesis_drift_alerts,
+        "observations": observations,
+        "confidence_weight": 1.0,  # Today's review, full confidence. Decay applied by reader (MEM-05).
+    }
+
+    output_path = Path(state_dir) / "eod_review.json"
+    save_state_atomic(output_path, result)
+    print(
+        f"\n  Wrote eod_review.json ({len(positions)} positions reviewed, "
+        f"{len(thesis_drift_alerts)} drift alerts)"
+    )
+
+    return result
 
 
 # ══════════════════════════════════════════════
