@@ -1073,8 +1073,36 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
 
     # Phase 3: Risk assessment
     assessed = task_risk_manager(candidates)
+
+    # Phase 3.5: Portfolio optimization (PORT-03)
+    try:
+        assessed = task_portfolio_strategist(assessed)
+    except Exception as e:
+        # Graceful degradation per D-12: non-critical failure
+        print(f"  ⚠️ Warning: Portfolio Strategist failed: {e}. Proceeding with risk-assessed trades.")
+
+    # Re-derive approved/rejected after portfolio strategist adjustment
     approved = [t for t in assessed if t.get("approved")]
     rejected = [t for t in assessed if not t.get("approved")]
+
+    # Execute partial close suggestions from Portfolio Strategist (D-03)
+    if execute:
+        try:
+            import json as _json
+            pc_path = Path(orch.state_dir) / "portfolio_construction.json"
+            if pc_path.exists():
+                with open(pc_path) as f:
+                    pc_data = _json.load(f)
+                partial_closes = pc_data.get("partial_close_suggestions", [])
+                if partial_closes:
+                    print(f"\n  Portfolio Strategist: {len(partial_closes)} partial close suggestion(s)")
+                    # Filter out symbols already exited by Position Reviewer
+                    already_exited = {c["symbol"] for c in (exit_candidates or [])}
+                    new_partials = [p for p in partial_closes if p["symbol"] not in already_exited]
+                    if new_partials:
+                        task_execute_exits(new_partials)
+        except Exception as e:
+            print(f"  ⚠️ Warning: Partial close execution failed: {e}")
 
     # Phase 4: Notify
     if notify:
