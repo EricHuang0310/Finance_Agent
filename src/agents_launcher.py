@@ -887,6 +887,51 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
     print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("🚀" * 20)
 
+    # ══════════════════════════════════════════════
+    # Pre-Market Strategic Layer (D-10)
+    # ══════════════════════════════════════════════
+
+    # Phase -2: Macro Strategist
+    print("\n" + "=" * 60)
+    print("📍 PRE-MARKET: Macro Strategist")
+    print("=" * 60)
+    try:
+        macro_result = task_macro_strategist()
+        print(f"  ✅ Macro outlook: regime suggestion = {macro_result.get('macro_regime_suggestion', 'N/A')}")
+    except Exception as e:
+        # Graceful degradation per D-12: non-critical failure
+        print(f"  ⚠️ Macro Strategist failed: {e}. CIO will decide without macro data.")
+        macro_result = None
+
+    # Phase -1: CIO Directive
+    print("\n" + "=" * 60)
+    print("📍 PRE-MARKET: CIO Directive")
+    print("=" * 60)
+    try:
+        cio_result = task_cio_directive()
+        print(f"  ✅ CIO stance: {cio_result.get('trading_stance', 'N/A')} (multiplier={cio_result.get('risk_budget_multiplier', 'N/A')})")
+
+        # Check for halt (CIO-02)
+        if cio_result.get("halt_trading", False):
+            print("\n  🛑 CIO HALT: All trading suspended for today.")
+            print("  Skipping analysis and trading phases.")
+            print("  Running EOD Review only.\n")
+            # Skip to EOD Review
+            try:
+                task_eod_review()
+            except Exception as eod_err:
+                print(f"  ⚠️ EOD Review failed: {eod_err}")
+            if notify:
+                try:
+                    notifier.send_message("🛑 CIO HALT: All trading suspended for today. No trades executed.")
+                except Exception:
+                    pass
+            return
+    except Exception as e:
+        # CIO failure is NOT a hard stop per D-12
+        print(f"  ⚠️ CIO Directive failed: {e}. Proceeding with default stance (neutral).")
+        cio_result = None
+
     # Phase 0: Dynamic symbol screening (if enabled)
     if orch.watchlist_mode == "dynamic":
         task_symbol_screener()
@@ -965,6 +1010,23 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
             print("  ℹ️  Standalone mode: Reflection Analyst skipped — contexts prepared for Agent Teams")
     except Exception as e:
         print(f"  ⚠️  Reflection check skipped: {e}")
+
+    # ══════════════════════════════════════════════
+    # Post-Market: EOD Review
+    # ══════════════════════════════════════════════
+
+    print("\n" + "=" * 60)
+    print("📍 POST-MARKET: EOD Review")
+    print("=" * 60)
+    try:
+        eod_result = task_eod_review()
+        drift_count = len(eod_result.get("thesis_drift_alerts", []))
+        if drift_count > 0:
+            print(f"  ⚠️ {drift_count} thesis drift alert(s) detected")
+        print(f"  ✅ EOD Review complete")
+    except Exception as e:
+        # Graceful degradation per D-12: non-critical failure
+        print(f"  ⚠️ EOD Review failed: {e}. Pipeline complete without EOD review.")
 
     return assessed
 
