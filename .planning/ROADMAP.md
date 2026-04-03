@@ -36,7 +36,7 @@ Plans:
 - [x] 01-04-PLAN.md — EOD Review task function + confidence decay
 - [x] 01-05-PLAN.md — CIO directive cascade + macro regime integration
 - [x] 01-06-PLAN.md — Standalone pipeline update with new phases
-- [ ] 01-07-PLAN.md — Team Orchestrator (programmatic TeamCreate)
+- [x] 01-07-PLAN.md — Team Orchestrator (programmatic TeamCreate)
 
 ### Phase 2: Portfolio Intelligence
 **Goal**: A Portfolio Strategist prevents the system from approving highly correlated positions by analyzing cross-position relationships and producing sizing adjustments
