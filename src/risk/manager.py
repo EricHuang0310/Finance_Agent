@@ -3,8 +3,12 @@ Risk Manager Module
 Validates trades against portfolio constraints and sizes positions.
 """
 
+import json
 from dataclasses import dataclass, asdict, field
+from pathlib import Path
 from typing import Optional
+
+from src.state_dir import get_state_dir
 
 
 @dataclass
@@ -19,6 +23,7 @@ class RiskAssessment:
     sizing_adjustments: list = field(default_factory=list)
     sector: str = "unknown"
     original_qty: int = 0
+    cio_stance: str = "neutral"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -267,6 +272,32 @@ class RiskManager:
                 sizing_adjustments.append(f"near_90d_low({distance_to_low_pct*100:.1f}%): {suggested_qty} → {adjusted}")
                 suggested_qty = adjusted
 
+        # ── CIO Trading Stance (CIO-03) ──────────────────────────
+        # Read daily_directive.json for trading_stance; adjust position sizing only (not veto)
+        state_dir = get_state_dir()
+        directive_path = Path(state_dir) / "daily_directive.json"
+        trading_stance = "neutral"
+        if directive_path.exists():
+            try:
+                with open(directive_path) as f:
+                    directive = json.load(f)
+                trading_stance = directive.get("trading_stance", "neutral")
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # Apply stance to position sizing (D-04: stance affects sizing, NOT approval)
+        if trading_stance == "defensive" and suggested_qty > 0:
+            adjusted = max(1, int(suggested_qty * 0.7))
+            sizing_adjustments.append(f"cio_defensive: {suggested_qty} → {adjusted}")
+            suggested_qty = adjusted
+        elif trading_stance == "aggressive" and suggested_qty > 0:
+            # Allow up to 20% larger positions by scaling max_position check
+            aggressive_room = self.equity * (self.max_position_pct * 1.2) - existing_value
+            aggressive_qty = int(aggressive_room / entry_price) if entry_price > 0 else 0
+            if aggressive_qty > suggested_qty:
+                sizing_adjustments.append(f"cio_aggressive: {suggested_qty} → {aggressive_qty}")
+                suggested_qty = aggressive_qty
+
         position_size_pct = (suggested_qty * entry_price / self.equity * 100) if self.equity > 0 else 0
 
         if suggested_qty <= 0:
@@ -275,6 +306,7 @@ class RiskManager:
                 reason=f"Insufficient room (existing {symbol} exposure: {existing_exposure_pct*100:.1f}%)",
                 suggested_qty=0, risk_reward_ratio=risk_reward, position_size_pct=0,
                 sector=sector, original_qty=original_qty, sizing_adjustments=sizing_adjustments,
+                cio_stance=trading_stance,
             )
 
         side_label = "shares" if side == "buy" else "shares (short)"
@@ -289,6 +321,7 @@ class RiskManager:
             sector=sector,
             original_qty=original_qty,
             sizing_adjustments=sizing_adjustments,
+            cio_stance=trading_stance,
         )
 
     def get_risk_summary(self) -> dict:
