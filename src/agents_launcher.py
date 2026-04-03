@@ -444,6 +444,13 @@ def task_execute_exits(exit_candidates: list[dict]) -> list[dict]:
                 "exit_reason": candidate["exit_reason"],
             }, result)
 
+            # Trade journal close entry (MEM-02)
+            try:
+                from src.journal.trade_journal import journal_on_close
+                journal_on_close(candidate, result)
+            except Exception as e:
+                print(f"  Warning: Journal on-close failed for {candidate['symbol']}: {e}")
+
         except Exception as e:
             print(f"  ❌ Failed to close {candidate['symbol']}: {e}")
             notifier.alert_order_rejected(candidate["symbol"], f"Exit failed: {e}")
@@ -520,6 +527,13 @@ def task_execute_trades(assessed: list[dict]) -> list[dict]:
 
             # Log trade
             orch._log_trade(trade, result)
+
+            # Trade journal entry (MEM-02)
+            try:
+                from src.journal.trade_journal import journal_on_fill
+                journal_on_fill(trade, result)
+            except Exception as e:
+                print(f"  Warning: Journal on-fill failed for {trade['symbol']}: {e}")
 
             # Telegram notification
             notifier.alert_order_executed(
