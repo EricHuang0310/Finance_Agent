@@ -13,7 +13,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **TEAMS-02**: Each agent role has a `.claude/agents/*.md` definition with YAML frontmatter specifying model tier, tools, and permissions
 - [x] **TEAMS-03**: Tiered model assignment enforced per role: Opus for CIO/Judge/Reflection, Sonnet for analysts/debate, Haiku for data collection/execution
 - [ ] **TEAMS-04**: Team lifecycle managed programmatically: spawn at pipeline start, shutdown after completion, no manual prompt pasting
-- [ ] **TEAMS-05**: Dual communication layer: SendMessage for coordination/decisions, shared_state JSON for structured data
+- [x] **TEAMS-05**: Dual communication layer: SendMessage for coordination/decisions, shared_state JSON for structured data
 
 ### Strategic Oversight
 
@@ -90,7 +90,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | TEAMS-02 | Phase 1 | Complete |
 | TEAMS-03 | Phase 1 | Complete |
 | TEAMS-04 | Phase 1 | Pending |
-| TEAMS-05 | Phase 1 | Pending |
+| TEAMS-05 | Phase 1 | Complete |
 | CIO-01 | Phase 1 | Complete |
 | CIO-02 | Phase 1 | Complete |
 | CIO-03 | Phase 1 | Complete |
