@@ -13,8 +13,12 @@ This file also supports standalone execution for testing.
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+
+import yfinance as yf
+
+from src.utils.state_io import save_state_atomic
 
 # Ensure project root is in path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -56,6 +60,140 @@ def get_orchestrator() -> TradingOrchestrator:
 # Each function is designed to be called by a
 # separate Claude Code teammate/agent
 # ══════════════════════════════════════════════
+
+def task_macro_strategist() -> dict:
+    """Fetch cross-asset data and produce macro_outlook.json.
+
+    Uses code-fetched real-time data only (MACRO-02). Never LLM memory.
+    Called by Macro Strategist teammate or standalone pipeline.
+    """
+    orch = get_orchestrator()
+    state_dir = get_state_dir()
+    cfg = orch.settings.get("macro", {})
+
+    print("\n" + "=" * 60)
+    print("  Macro Strategist - Cross-Asset Analysis")
+    print("=" * 60)
+
+    cross_asset = {}
+    data_freshness = {}
+
+    # 1. VIX via yfinance
+    vix_ticker = cfg.get("vix_ticker", "^VIX")
+    try:
+        vix_data = yf.Ticker(vix_ticker).history(period="1mo")
+        if vix_data is not None and len(vix_data) > 0:
+            vix_close = float(vix_data["Close"].iloc[-1])
+            sma5 = float(vix_data["Close"].tail(5).mean())
+            sma20 = float(vix_data["Close"].tail(20).mean())
+            cross_asset["vix"] = {
+                "value": round(vix_close, 2),
+                "trend": "declining" if sma5 < sma20 else "rising",
+                "sma5_vs_sma20": "below" if sma5 < sma20 else "above",
+            }
+            data_freshness["vix_source"] = "yfinance"
+            print(f"  VIX: {vix_close:.2f} (SMA5 {'<' if sma5 < sma20 else '>'} SMA20)")
+    except Exception as e:
+        print(f"  WARNING: VIX data unavailable: {e}")
+        cross_asset["vix"] = {"value": None, "trend": "unknown", "error": str(e)}
+        data_freshness["vix_source"] = "unavailable"
+
+    # 2. TLT (bonds) via Alpaca
+    tlt_ticker = cfg.get("tlt_ticker", "TLT")
+    try:
+        client = AlpacaClient()
+        tlt_bars = client.get_bars(tlt_ticker, "1Day", lookback_days=cfg.get("trend_lookback_days", 20))
+        if tlt_bars is not None and len(tlt_bars) > 0:
+            tlt_close = float(tlt_bars["close"].iloc[-1])
+            tlt_sma = float(tlt_bars["close"].mean())
+            trend = "rising" if tlt_close > tlt_sma else "declining"
+            interp = "yields_falling_risk_off" if trend == "rising" else "yields_rising_risk_on"
+            cross_asset["tlt"] = {
+                "price": round(tlt_close, 2),
+                "trend": trend,
+                "interpretation": interp,
+            }
+            data_freshness["tlt_source"] = "alpaca"
+            print(f"  TLT: ${tlt_close:.2f} ({trend}) -> {interp}")
+    except Exception as e:
+        print(f"  WARNING: TLT data unavailable: {e}")
+        cross_asset["tlt"] = {"price": None, "trend": "unknown", "error": str(e)}
+        data_freshness["tlt_source"] = "unavailable"
+
+    # 3. UUP (dollar) via Alpaca
+    uup_ticker = cfg.get("uup_ticker", "UUP")
+    try:
+        client = AlpacaClient()
+        uup_bars = client.get_bars(uup_ticker, "1Day", lookback_days=cfg.get("trend_lookback_days", 20))
+        if uup_bars is not None and len(uup_bars) > 0:
+            uup_close = float(uup_bars["close"].iloc[-1])
+            uup_sma = float(uup_bars["close"].mean())
+            trend = "rising" if uup_close > uup_sma else "flat" if abs(uup_close - uup_sma) / uup_sma < 0.005 else "declining"
+            interp = "dollar_strong" if trend == "rising" else "dollar_neutral" if trend == "flat" else "dollar_weak"
+            cross_asset["uup"] = {
+                "price": round(uup_close, 2),
+                "trend": trend,
+                "interpretation": interp,
+            }
+            data_freshness["uup_source"] = "alpaca"
+            print(f"  UUP: ${uup_close:.2f} ({trend}) -> {interp}")
+    except Exception as e:
+        print(f"  WARNING: UUP data unavailable: {e}")
+        cross_asset["uup"] = {"price": None, "trend": "unknown", "error": str(e)}
+        data_freshness["uup_source"] = "unavailable"
+
+    # 4. Yield curve via yfinance
+    yield_10y = cfg.get("yield_10y_ticker", "^TNX")
+    yield_3m = cfg.get("yield_3m_ticker", "^IRX")
+    try:
+        tnx = yf.Ticker(yield_10y).history(period="5d")
+        irx = yf.Ticker(yield_3m).history(period="5d")
+        if tnx is not None and len(tnx) > 0 and irx is not None and len(irx) > 0:
+            tnx_val = float(tnx["Close"].iloc[-1])
+            irx_val = float(irx["Close"].iloc[-1])
+            spread = round(tnx_val - irx_val, 3)
+            cross_asset["yield_curve"] = {
+                "spread_10y_3m": spread,
+                "inverted": spread < 0,
+                "ten_year": round(tnx_val, 3),
+                "three_month": round(irx_val, 3),
+            }
+            data_freshness["yield_curve_source"] = "yfinance"
+            print(f"  Yield Curve: 10Y={tnx_val:.3f}% 3M={irx_val:.3f}% spread={spread:.3f}{'  INVERTED' if spread < 0 else ''}")
+    except Exception as e:
+        print(f"  WARNING: Yield curve data unavailable: {e}")
+        cross_asset["yield_curve"] = {"spread_10y_3m": None, "inverted": None, "error": str(e)}
+        data_freshness["yield_curve_source"] = "unavailable"
+
+    # Determine macro regime suggestion
+    vix_val = cross_asset.get("vix", {}).get("value")
+    tlt_trend = cross_asset.get("tlt", {}).get("trend")
+    yield_inverted = cross_asset.get("yield_curve", {}).get("inverted")
+
+    if vix_val and vix_val > 30:
+        regime_suggestion = "risk_off"
+    elif vix_val and vix_val < 18 and tlt_trend == "declining":
+        regime_suggestion = "risk_on"
+    elif yield_inverted:
+        regime_suggestion = "risk_off"
+    else:
+        regime_suggestion = "neutral"
+
+    result = {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "timestamp": datetime.now().isoformat(),
+        "cross_asset_signals": cross_asset,
+        "macro_regime_suggestion": regime_suggestion,
+        "key_events": [],  # Populated by LLM teammate reasoning, empty in code path
+        "data_freshness": data_freshness,
+    }
+
+    output_path = Path(state_dir) / "macro_outlook.json"
+    save_state_atomic(output_path, result)
+    print(f"\n  Wrote macro_outlook.json -> regime suggestion: {regime_suggestion}")
+
+    return result
+
 
 def task_symbol_screener() -> dict:
     """Task for Symbol Screener agent. Discovers symbols dynamically."""
