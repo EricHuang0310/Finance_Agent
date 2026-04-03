@@ -51,7 +51,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Memory System
 
 - [x] **MEM-01**: Fix silent memory corruption (replace pass-through exception handling with proper error reporting)
-- [ ] **MEM-02**: Add structured trade journal with entry/exit prices, P&L, thesis, and outcome tagging
+- [x] **MEM-02**: Add structured trade journal with entry/exit prices, P&L, thesis, and outcome tagging
 - [ ] **MEM-03**: Add cross-session strategy learning: pattern recognition across trades (which setups work, which fail)
 - [x] **MEM-04**: Fix trade log race condition for concurrent Agent Teams execution
 - [x] **MEM-05**: EOD review insights integrate into memory with confidence decay
@@ -110,7 +110,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | EXEC-02 | Phase 3 | Pending |
 | EXEC-03 | Phase 3 | Pending |
 | MEM-01 | Phase 1 | Complete |
-| MEM-02 | Phase 2 | Pending |
+| MEM-02 | Phase 2 | Complete |
 | MEM-03 | Phase 3 | Pending |
 | MEM-04 | Phase 1 | Complete |
 | MEM-05 | Phase 1 | Complete |
