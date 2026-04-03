@@ -38,9 +38,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Debate Enhancement
 
-- [ ] **SECT-01**: Sector Specialist agent provides deep sector intelligence during investment debate for top-N candidates
-- [ ] **SECT-02**: Sector Specialist covers supply chain dynamics, sector rotation signals, and competitive landscape
-- [ ] **SECT-03**: Sector Specialist joins Bull/Bear/Judge debate as a 4th voice providing domain expertise
+- [x] **SECT-01**: Sector Specialist agent provides deep sector intelligence during investment debate for top-N candidates
+- [x] **SECT-02**: Sector Specialist covers supply chain dynamics, sector rotation signals, and competitive landscape
+- [x] **SECT-03**: Sector Specialist joins Bull/Bear/Judge debate as a 4th voice providing domain expertise
 
 ### Execution Optimization
 
@@ -103,9 +103,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | EOD-01 | Phase 1 | Complete |
 | EOD-02 | Phase 1 | Complete |
 | EOD-03 | Phase 1 | Complete |
-| SECT-01 | Phase 3 | Pending |
-| SECT-02 | Phase 3 | Pending |
-| SECT-03 | Phase 3 | Pending |
+| SECT-01 | Phase 3 | Complete |
+| SECT-02 | Phase 3 | Complete |
+| SECT-03 | Phase 3 | Complete |
 | EXEC-01 | Phase 3 | Pending |
 | EXEC-02 | Phase 3 | Pending |
 | EXEC-03 | Phase 3 | Pending |
