@@ -1040,6 +1040,7 @@ AGENT_TEAMS_PROMPT = """
 
 啟動一個 trading-analysis agent team 來分析市場並生成交易建議。
 此 pipeline 包含投資辯論環節，模擬真實投資團隊的決策流程。
+新增戰略監督層：宏觀策略師 → CIO 指令 → 原有 pipeline → EOD 審查。
 
 ## 架構說明
 - **Subagent** = 讀取對應 agent spec（`agents/` 下的 .md），整份內容作為 Task tool prompt spawn 執行
@@ -1051,6 +1052,46 @@ AGENT_TEAMS_PROMPT = """
 - **Tier 1 (Haiku)**: 純程式碼執行 subagent → `model="haiku"`
 - **Tier 2 (Sonnet)**: 結構化論述 teammate → `model="sonnet"`
 - **Tier 3 (Opus)**: 深度推理判決 teammate → 不指定 model（使用預設 Opus）
+
+## Pipeline 總覽
+```
+Phase -2:  Macro Strategist     [Subagent, Sonnet]  (跨資產數據收集 → macro_outlook.json)
+Phase -1:  CIO Directive        [Lead 直接執行]      (交易立場 + 風險預算 → daily_directive.json)
+           → 如果 halt_trading=true: 跳至 EOD Review，跳過所有分析和交易
+Phase 0:   Symbol Screener      [Subagent, Haiku]   (動態 watchlist，僅 dynamic 模式)
+Phase 1:   Market/Tech/Sentiment [Subagent x3, Haiku] (可並行)
+Phase 1.5: Position Exit Review  [Subagent, Haiku]
+Phase 2:   Decision Engine       [Lead 直接執行]
+Phase 2.5: Fundamentals + Debate [Subagent + Teammate]
+Phase 3:   Risk Manager          [Subagent, Haiku]
+Phase 4:   Executor              [Subagent, Haiku]
+Phase 5:   Reporter              [Subagent, Haiku]   (Telegram 通知)
+Phase 6:   EOD Review            [Subagent, Sonnet]  (P&L 歸因 + 論點漂移 → eod_review.json)
+Phase 7:   Reflection            [Teammate, Opus]    (交易後學習)
+```
+
+---
+
+## Phase -2 (Macro Strategist, 盤前第一步)
+**[Subagent, model="sonnet"]** 讀取 `agents/strategic/macro_strategist.md` 完整內容，用 Task tool spawn 執行。使用 `model="sonnet"`。
+或者 Lead 直接呼叫：
+```python
+from src.agents_launcher import task_macro_strategist
+macro_result = task_macro_strategist()
+```
+輸出：`shared_state/YYYY-MM-DD/macro_outlook.json`（跨資產信號、宏觀環境建議）
+
+---
+
+## Phase -1 (CIO Directive, 等 Phase -2 完成)
+**[Lead 直接執行]** CIO 讀取 macro_outlook.json + 昨日 eod_review.json + 市場環境，產生當日交易指令：
+```python
+from src.agents_launcher import task_cio_directive
+cio_result = task_cio_directive()
+```
+輸出：`shared_state/YYYY-MM-DD/daily_directive.json`（trading_stance, risk_budget_multiplier, halt_trading）
+
+**halt_trading 檢查**：如果 `daily_directive.json` 中 `halt_trading=true`，跳過所有分析和交易，直接執行 EOD Review 後結束 pipeline。
 
 ---
 
@@ -1132,7 +1173,19 @@ candidates = task_merge_debates(candidates)
 
 ---
 
-## Phase 6 (Reflection & Memory Update)
+## Phase 6 (EOD Review, 等 Phase 5 完成)
+**[Subagent, model="sonnet"]** 讀取 `agents/strategic/eod_review.md` 完整內容，用 Task tool spawn 執行。使用 `model="sonnet"`。
+或者 Lead 直接呼叫：
+```python
+from src.agents_launcher import task_eod_review
+eod_result = task_eod_review()
+```
+輸出：`shared_state/YYYY-MM-DD/eod_review.json`（P&L 歸因、論點漂移警報、觀察性洞察）
+注意：EOD 輸出是**觀察**而非**指令**，避免循環推理。明日 CIO 讀取時自帶信心衰減。
+
+---
+
+## Phase 7 (Reflection & Memory Update)
 
 **[Lead]** 檢查未反思的交易：
 ```python
