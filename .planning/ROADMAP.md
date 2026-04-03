@@ -34,8 +34,8 @@ Plans:
 - [x] 01-02-PLAN.md — Strategic role agent specs + model tiers + settings config
 - [x] 01-03-PLAN.md — Macro Strategist + CIO task functions
 - [x] 01-04-PLAN.md — EOD Review task function + confidence decay
-- [ ] 01-05-PLAN.md — CIO directive cascade + macro regime integration
-- [ ] 01-06-PLAN.md — Standalone pipeline update with new phases
+- [x] 01-05-PLAN.md — CIO directive cascade + macro regime integration
+- [x] 01-06-PLAN.md — Standalone pipeline update with new phases
 - [ ] 01-07-PLAN.md — Team Orchestrator (programmatic TeamCreate)
 
 ### Phase 2: Portfolio Intelligence
