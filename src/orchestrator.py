@@ -277,9 +277,35 @@ class TradingOrchestrator:
             regime_confidence = spy_confidence * 0.6 + agreement_pct * 0.4
             regime_confidence = max(0.1, min(1.0, regime_confidence))
 
+            # ── Macro Outlook Enrichment (MACRO-03) ──────────────────────
+            # Enrich narrow SPY-based regime with cross-asset signals from Macro Strategist
+            macro_path = self.state_dir / "macro_outlook.json"
+            macro_regime_suggestion = None
+            if macro_path.exists():
+                try:
+                    with open(macro_path) as f:
+                        macro = json.load(f)
+                    macro_regime_suggestion = macro.get("macro_regime_suggestion")
+                    cross_asset = macro.get("cross_asset_signals", {})
+
+                    # If macro and SPY disagree, reduce confidence
+                    if macro_regime_suggestion and macro_regime_suggestion != spy_regime:
+                        spy_confidence = max(0.3, spy_confidence - 0.2)
+                        regime_confidence = max(0.3, regime_confidence - 0.2)
+                        print(f"  🌍 Macro disagrees (macro={macro_regime_suggestion}, SPY={spy_regime}) → confidence reduced to {regime_confidence:.2f}")
+
+                    # If macro agrees, boost confidence
+                    elif macro_regime_suggestion and macro_regime_suggestion == spy_regime:
+                        regime_confidence = min(1.0, regime_confidence + 0.1)
+                        print(f"  🌍 Macro confirms {spy_regime} → confidence boosted to {regime_confidence:.2f}")
+
+                except (json.JSONDecodeError, KeyError):
+                    pass  # Macro data optional
+
             result = {
                 "regime": spy_regime,
                 "regime_confidence": round(regime_confidence, 4),
+                "macro_regime_suggestion": macro_regime_suggestion,
             }
             if vix_value is not None:
                 result["vix"] = round(vix_value, 2)
@@ -602,6 +628,36 @@ class TradingOrchestrator:
             effective_min_sell = min_sell + 0.1
         elif regime == "risk_off":
             effective_min_buy = max(min_buy, 0.6)
+
+        # ── CIO Directive Cascade (CIO-03) ──────────────────────────
+        directive_path = self.state_dir / "daily_directive.json"
+        risk_budget_multiplier = 1.0  # default: neutral
+        trading_stance = "neutral"
+        cio_halt = False
+        if directive_path.exists():
+            try:
+                with open(directive_path) as f:
+                    directive = json.load(f)
+                risk_budget_multiplier = directive.get("risk_budget_multiplier", 1.0)
+                trading_stance = directive.get("trading_stance", "neutral")
+                cio_halt = directive.get("halt_trading", False)
+                print(f"  👔 CIO Directive: stance={trading_stance}, multiplier={risk_budget_multiplier}, halt={cio_halt}")
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"  ⚠️ CIO directive unreadable: {e}, using defaults")
+        else:
+            print(f"  ℹ️ No CIO directive found, using defaults (stance=neutral, multiplier=1.0)")
+
+        # If CIO halted trading, return empty list immediately
+        if cio_halt:
+            print("  🛑 CIO HALT: All trading suspended for today")
+            return []
+
+        # Scale thresholds by CIO's risk_budget_multiplier
+        # Higher multiplier = more aggressive = lower buy threshold (easier to qualify)
+        # Research recommendation: scale thresholds, not scores (preserves audit trail)
+        effective_min_buy = effective_min_buy / risk_budget_multiplier if risk_budget_multiplier > 0 else float('inf')
+        effective_min_sell = effective_min_sell / risk_budget_multiplier if risk_budget_multiplier > 0 else float('inf')
+        print(f"  📐 Adjusted thresholds: buy>={effective_min_buy:.3f}, sell>={effective_min_sell:.3f}")
 
         def _score_symbol(symbol, signal, sent_data, mkt_score, asset_type):
             tech_score = signal.get("score", 0)
