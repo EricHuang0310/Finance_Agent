@@ -1035,6 +1035,10 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
 # Agent Teams Launch Prompt
 # ══════════════════════════════════════════════
 
+# DEPRECATED: Use src.team_orchestrator.build_team_prompt() instead.
+# Kept for backward compatibility with existing scripts.
+# The team_orchestrator generates a dynamic, config-driven prompt that
+# reads model tiers from settings.yaml and embeds the CIO agent spec.
 AGENT_TEAMS_PROMPT = """
 # ─── Copy this into Claude Code after enabling Agent Teams ───
 
@@ -1226,7 +1230,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.prompt:
-        print(AGENT_TEAMS_PROMPT)
+        from src.team_orchestrator import build_team_prompt
+        print(build_team_prompt(
+            execute=args.trade,
+            notify=args.notify if hasattr(args, "notify") else True,
+        ))
     elif args.test_telegram:
         notifier = TelegramNotifier()
         notifier.test_connection()
