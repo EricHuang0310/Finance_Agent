@@ -61,7 +61,11 @@ Plans:
   2. Before orders execute, an execution_plan.json recommends order type (market, limit, bracket, TWAP) based on current volatility and liquidity conditions
   3. Execution Strategist tracks estimated vs actual fill quality, and this data is available for future order type decisions
   4. The memory system recognizes patterns across historical trades (which setups work, which fail) and surfaces relevant lessons during analysis
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Sector Specialist agent spec + debate context enrichment (SECT-01, SECT-02, SECT-03)
+- [ ] 03-02-PLAN.md — Execution Strategist module + order type dispatch + fill tracking (EXEC-01, EXEC-02, EXEC-03)
+- [ ] 03-03-PLAN.md — Cross-session trade pattern learning in memory system (MEM-03)
 
 ## Progress
 
@@ -72,4 +76,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Strategic Oversight & Agent Teams Foundation | 7/7 | Complete |  |
 | 2. Portfolio Intelligence | 3/3 | Complete   | 2026-04-03 |
-| 3. Debate & Execution Enhancement | 0/TBD | Not started | - |
+| 3. Debate & Execution Enhancement | 0/3 | In progress | - |
