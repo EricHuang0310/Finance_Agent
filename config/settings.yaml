@@ -168,6 +168,21 @@ eod_review:
   drift_rsi_threshold: 15          # RSI change from entry exceeding this flags drift
   drift_price_reversal_pct: 5      # Price reversal from entry exceeding this flags drift
 
+# ══════════════════════════════════════════════
+# Portfolio Intelligence Configuration
+# ══════════════════════════════════════════════
+
+portfolio:
+  # Correlation analysis
+  correlation_lookback_days: 20       # Match screener lookback (D-01)
+  correlation_warn_threshold: 0.7     # Flag correlated positions
+  correlation_reject_threshold: 0.9   # Reject highly correlated positions
+  correlation_reduce_pct: 0.30        # Reduce sizing by 30% when warned
+  min_correlation_data_points: 15     # Skip symbols with < 15 days data
+  # Partial close for concentration (D-03)
+  concentration_corr_threshold: 0.8   # Suggest partial close when existing portfolio is this correlated
+  concentration_partial_pct: 0.25     # Suggest closing 25% of concentrated positions
+
 # Model tier assignments (TEAMS-03)
 model_tiers:
   # Strategic (CIO is Lead agent, uses default model)
@@ -185,6 +200,7 @@ model_tiers:
   research-judge: opus
   # Risk + Execution
   risk-manager: haiku
+  portfolio-strategist: sonnet
   executor: haiku
   position-reviewer: haiku
   # Post-trade
