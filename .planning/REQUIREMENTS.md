@@ -28,7 +28,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **PORT-01**: Portfolio Strategist analyzes cross-position correlations before new positions are approved
 - [x] **PORT-02**: Portfolio Strategist produces portfolio_construction.json with sizing adjustments to prevent approving highly correlated positions
-- [ ] **PORT-03**: Portfolio Strategist runs after Risk Manager and before Executor, as an additional optimization layer
+- [x] **PORT-03**: Portfolio Strategist runs after Risk Manager and before Executor, as an additional optimization layer
 
 ### Feedback Loop
 
@@ -99,7 +99,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | MACRO-03 | Phase 1 | Complete |
 | PORT-01 | Phase 2 | Complete |
 | PORT-02 | Phase 2 | Complete |
-| PORT-03 | Phase 2 | Pending |
+| PORT-03 | Phase 2 | Complete |
 | EOD-01 | Phase 1 | Complete |
 | EOD-02 | Phase 1 | Complete |
 | EOD-03 | Phase 1 | Complete |

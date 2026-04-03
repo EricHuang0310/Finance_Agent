@@ -13,7 +13,7 @@ Transform the existing working trading pipeline into a proper Agent Teams system
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Strategic Oversight & Agent Teams Foundation** - Establish TeamCreate pipeline, add CIO/Macro/EOD roles, fix memory reliability
-- [ ] **Phase 2: Portfolio Intelligence** - Add Portfolio Strategist for cross-position optimization and structured trade journals
+- [x] **Phase 2: Portfolio Intelligence** - Add Portfolio Strategist for cross-position optimization and structured trade journals (completed 2026-04-03)
 - [ ] **Phase 3: Debate & Execution Enhancement** - Add Sector Specialist to debates and Execution Strategist for order optimization
 
 ## Phase Details
@@ -46,10 +46,10 @@ Plans:
   1. Before new positions are approved, portfolio_construction.json exists showing cross-position correlation analysis and sizing adjustments
   2. Portfolio Strategist runs after Risk Manager and before Executor, rejecting or downsizing positions that would create excessive correlation
   3. Every trade has a structured journal entry with entry/exit prices, P&L, thesis, and outcome tagging stored in the memory system
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 02-01-PLAN.md — PortfolioStrategist class + agent spec + config + task function (PORT-01, PORT-02)
-- [ ] 02-02-PLAN.md — Pipeline integration: wire into run_full_pipeline() + team_orchestrator (PORT-03)
+- [x] 02-02-PLAN.md — Pipeline integration: wire into run_full_pipeline() + team_orchestrator (PORT-03)
 - [x] 02-03-PLAN.md — Trade journal with lifecycle tracking and R-multiple (MEM-02)
 
 ### Phase 3: Debate & Execution Enhancement
@@ -71,5 +71,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Strategic Oversight & Agent Teams Foundation | 7/7 | Complete |  |
-| 2. Portfolio Intelligence | 2/3 | In Progress|  |
+| 2. Portfolio Intelligence | 3/3 | Complete   | 2026-04-03 |
 | 3. Debate & Execution Enhancement | 0/TBD | Not started | - |
