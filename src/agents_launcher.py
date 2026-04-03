@@ -71,7 +71,7 @@ def task_macro_strategist() -> dict:
     """
     orch = get_orchestrator()
     state_dir = get_state_dir()
-    cfg = orch.settings.get("macro", {})
+    cfg = orch.config.get("macro", {})
 
     print("\n" + "=" * 60)
     print("  Macro Strategist - Cross-Asset Analysis")
@@ -204,7 +204,7 @@ def get_recent_eod_insights(max_days: int = 3) -> list[dict]:
     Used by CIO to inform stance decisions (EOD-03 / MEM-05).
     """
     orch = get_orchestrator()
-    decay_cfg = orch.settings.get("eod_review", {}).get("decay_weights", {1: 1.0, 2: 0.5, 3: 0.25})
+    decay_cfg = orch.config.get("eod_review", {}).get("decay_weights", {1: 1.0, 2: 0.5, 3: 0.25})
     state_base = Path(get_state_dir()).parent  # parent of YYYY-MM-DD dir
     results = []
     today = datetime.now().date()
@@ -238,7 +238,7 @@ def task_cio_directive() -> dict:
     """
     orch = get_orchestrator()
     state_dir = get_state_dir()
-    cio_cfg = orch.settings.get("cio", {})
+    cio_cfg = orch.config.get("cio", {})
 
     print("\n" + "=" * 60)
     print("  CIO - Daily Trading Directive")
@@ -871,7 +871,7 @@ def task_eod_review() -> dict:
     """
     orch = get_orchestrator()
     state_dir = get_state_dir()
-    eod_cfg = orch.settings.get("eod_review", {})
+    eod_cfg = orch.config.get("eod_review", {})
 
     print("\n" + "=" * 60)
     print("  EOD Review - Daily Performance Attribution")
@@ -1116,7 +1116,7 @@ def run_full_pipeline(execute: bool = False, notify: bool = True):
                 print(f"  ⚠️ EOD Review failed: {eod_err}")
             if notify:
                 try:
-                    notifier.send_message("🛑 CIO HALT: All trading suspended for today. No trades executed.")
+                    notifier.send("🛑 CIO HALT: All trading suspended for today. No trades executed.")
                 except Exception:
                     pass
             return

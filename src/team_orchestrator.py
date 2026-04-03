@@ -110,7 +110,16 @@ def build_team_prompt(execute: bool = False, notify: bool = True) -> str:
 - Decision Engine (Lead direct -- 你自己執行):
   ```python
   from src.agents_launcher import task_generate_decisions
-  candidates = task_generate_decisions(execute={execute})
+  from src.state_dir import get_state_dir
+  import json
+  state_dir = get_state_dir()
+  with open(state_dir / 'technical_signals.json') as f:
+      tech = json.load(f)
+  with open(state_dir / 'sentiment_signals.json') as f:
+      sent = json.load(f)
+  with open(state_dir / 'market_overview.json') as f:
+      market = json.load(f)
+  candidates = task_generate_decisions(tech, sent, market)
   ```
 
 ### Phase Group 3: Investment Debate (Top-N candidates)
