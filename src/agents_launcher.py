@@ -468,6 +468,96 @@ def task_risk_manager(candidates: list[dict]) -> list[dict]:
     return result
 
 
+def task_portfolio_strategist(assessed: list[dict]) -> list[dict]:
+    """Task for Portfolio Strategist. Post-processes risk-assessed trades for correlation optimization."""
+    print("[Portfolio Strategist] Analyzing cross-position correlations...")
+    orch = get_orchestrator()
+    from src.portfolio.strategist import PortfolioStrategist
+
+    strategist = PortfolioStrategist(orch.config)
+
+    # Get current portfolio positions
+    try:
+        positions = orch.client.get_positions()
+    except Exception as e:
+        print(f"  Warning: Could not fetch positions: {e}. Skipping correlation analysis.")
+        return assessed
+
+    existing_symbols = [p["symbol"] for p in positions]
+    approved_symbols = [t["symbol"] for t in assessed if t.get("approved")]
+
+    # If no existing positions, skip correlation (first trades of the day)
+    if not existing_symbols:
+        print("  No existing positions. Skipping correlation analysis.")
+        # Still write a minimal portfolio_construction.json
+        save_state_atomic(
+            Path(orch.state_dir) / "portfolio_construction.json",
+            {
+                "status": "skipped",
+                "reason": "no_existing_positions",
+                "adjustments": [],
+                "partial_close_suggestions": [],
+            },
+        )
+        return assessed
+
+    # Combine all symbols for correlation matrix
+    all_symbols = list(set(existing_symbols + approved_symbols))
+
+    # Compute correlation matrix using cached bar data
+    corr_matrix, metadata = strategist.compute_correlation_matrix(
+        symbols=all_symbols,
+        bar_getter=orch._get_bars,
+    )
+
+    if corr_matrix.empty:
+        print(f"  Insufficient data for correlation matrix. Skipping.")
+        return assessed
+
+    print(
+        f"  Correlation matrix: {len(metadata['symbols_included'])} symbols, "
+        f"{metadata['data_points']} data points, {len(metadata['symbols_skipped'])} skipped"
+    )
+
+    # Apply sizing adjustments to approved trades
+    adjusted = strategist.adjust_sizing(assessed, existing_symbols, corr_matrix)
+
+    # Check for rejections and reductions
+    for orig, adj in zip(assessed, adjusted):
+        if orig.get("approved") and not adj.get("approved"):
+            print(f"  REJECTED {adj['symbol']}: {adj.get('portfolio_rejection', 'correlation too high')}")
+        elif adj.get("portfolio_correlation"):
+            pc = adj["portfolio_correlation"]
+            print(f"  REDUCED {adj['symbol']}: max_corr={pc['max_correlation']:.2f}, action={pc['action']}")
+
+    # Suggest partial closes for concentrated portfolio (D-03)
+    partial_suggestions = strategist.suggest_partial_closes(positions, corr_matrix)
+    if partial_suggestions:
+        print(f"  Portfolio concentration: {len(partial_suggestions)} partial close suggestion(s)")
+        for s in partial_suggestions:
+            print(f"    {s['symbol']}: close {s['partial_close_pct']*100:.0f}% -- {s['exit_reason']}")
+
+    # Read CIO stance if available
+    cio_stance = "neutral"
+    try:
+        directive_path = Path(orch.state_dir) / "daily_directive.json"
+        if directive_path.exists():
+            with open(directive_path) as f:
+                cio_stance = json.load(f).get("trading_stance", "neutral")
+    except Exception:
+        pass
+
+    # Build and save portfolio_construction.json
+    result = strategist.build_result(corr_matrix, metadata, adjusted, partial_suggestions, cio_stance)
+    save_state_atomic(
+        Path(orch.state_dir) / "portfolio_construction.json",
+        result,
+    )
+    print("[Portfolio Strategist] Complete")
+
+    return adjusted
+
+
 def task_generate_decisions(tech_signals: dict, sentiment: dict, market_data: dict = None) -> list[dict]:
     """Generate trade decisions from aggregated signals."""
     print("🧠 [Decision Engine] Aggregating signals...")
