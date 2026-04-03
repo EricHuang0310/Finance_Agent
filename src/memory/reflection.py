@@ -166,6 +166,16 @@ def task_save_reflections(trade_id: str, orchestrator) -> bool:
         json.dump(reflected_ids, f)
 
     print(f"  ✅ Reflection saved for trade {trade_id} ({result.get('symbol', '?')})")
+
+    # Trigger pattern re-extraction from updated journal (MEM-03)
+    try:
+        from src.memory.patterns import load_and_extract_patterns
+        pattern_count = load_and_extract_patterns()
+        if pattern_count > 0:
+            print(f"  📊 Extracted {pattern_count} trade patterns from journal")
+    except Exception as e:
+        print(f"  ⚠️  Pattern extraction failed (non-critical): {e}")
+
     return True
 
 

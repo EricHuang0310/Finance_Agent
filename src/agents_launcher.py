@@ -834,6 +834,26 @@ def task_save_reflection_results(trade_id: str) -> bool:
     return success
 
 
+def task_extract_patterns() -> int:
+    """Extract trade patterns from closed journal entries (MEM-03).
+
+    Can be called standalone or is triggered automatically after reflection.
+    Returns count of patterns extracted.
+    """
+    print("📊 [Pattern Learning] Extracting trade patterns...")
+    try:
+        from src.memory.patterns import load_and_extract_patterns
+        count = load_and_extract_patterns()
+        if count == 0:
+            print("📊 [Pattern Learning] ℹ️  Not enough closed trades for pattern extraction")
+        else:
+            print(f"📊 [Pattern Learning] ✅ Extracted {count} patterns from journal")
+        return count
+    except Exception as e:
+        print(f"📊 [Pattern Learning] ⚠️  Failed: {e}")
+        return 0
+
+
 # ══════════════════════════════════════════════
 # EOD Review Task Function
 # Produces eod_review.json with P&L attribution,

@@ -216,6 +216,16 @@ def task_prepare_debate_context(symbol: str, orchestrator) -> dict:
         m["lesson"] for m in orchestrator.research_judge_memory.search(situation_text, top_k=2)
     ]
 
+    # Retrieve trade pattern memories (MEM-03)
+    try:
+        from src.memory.patterns import get_pattern_memory
+        pattern_memory = get_pattern_memory()
+        context["past_memories_patterns"] = [
+            m["lesson"] for m in pattern_memory.search(situation_text, top_k=3)
+        ]
+    except Exception:
+        context["past_memories_patterns"] = []
+
     # Save context file
     STATE_DIR.mkdir(exist_ok=True)
     out_path = STATE_DIR / f"debate_context_{symbol}.json"
@@ -276,5 +286,10 @@ def _build_situation_text(context: dict) -> str:
 
     regime = context.get("market_regime", "transitional")
     parts.append(f"Regime: {regime}")
+
+    # Sector information enriches pattern matching quality (MEM-03)
+    sector_intel = context.get("sector_intelligence", {})
+    if sector_intel and not sector_intel.get("error"):
+        parts.append(f"Sector: {sector_intel.get('sector', 'N/A')} Industry: {sector_intel.get('industry', 'N/A')}")
 
     return " | ".join(parts) if parts else "No data available"
