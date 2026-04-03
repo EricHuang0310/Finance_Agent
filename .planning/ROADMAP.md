@@ -46,9 +46,9 @@ Plans:
   1. Before new positions are approved, portfolio_construction.json exists showing cross-position correlation analysis and sizing adjustments
   2. Portfolio Strategist runs after Risk Manager and before Executor, rejecting or downsizing positions that would create excessive correlation
   3. Every trade has a structured journal entry with entry/exit prices, P&L, thesis, and outcome tagging stored in the memory system
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 Plans:
-- [ ] 02-01-PLAN.md — PortfolioStrategist class + agent spec + config + task function (PORT-01, PORT-02)
+- [x] 02-01-PLAN.md — PortfolioStrategist class + agent spec + config + task function (PORT-01, PORT-02)
 - [ ] 02-02-PLAN.md — Pipeline integration: wire into run_full_pipeline() + team_orchestrator (PORT-03)
 - [x] 02-03-PLAN.md — Trade journal with lifecycle tracking and R-multiple (MEM-02)
 
@@ -71,5 +71,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Strategic Oversight & Agent Teams Foundation | 7/7 | Complete |  |
-| 2. Portfolio Intelligence | 0/3 | Not started | - |
+| 2. Portfolio Intelligence | 2/3 | In Progress|  |
 | 3. Debate & Execution Enhancement | 0/TBD | Not started | - |
