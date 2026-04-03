@@ -206,6 +206,8 @@ model_tiers:
   bull-researcher: sonnet
   bear-researcher: sonnet
   research-judge: opus
+  # Sector Intelligence
+  sector-specialist: sonnet
   # Risk + Execution
   risk-manager: haiku
   portfolio-strategist: sonnet

@@ -29,6 +29,7 @@ from src.alpaca_client import AlpacaClient
 from src.orchestrator import TradingOrchestrator
 from src.notifications.telegram import TelegramNotifier
 from src.debate.helpers import (
+    _fetch_sector_intelligence,
     task_prepare_debate_context,
     task_merge_debate_results,
 )
@@ -733,6 +734,28 @@ def task_merge_debates(candidates: list[dict]) -> list[dict]:
     result = task_merge_debate_results(candidates)
     print(f"🔀 [Debate Merge] ✅ Merged {len(result)} candidates")
     return result
+
+
+def task_sector_specialist(symbol: str) -> dict:
+    """Fetch sector intelligence for a symbol and persist to shared_state.
+
+    Called by Lead Agent BEFORE task_prepare_debate() so that sector data
+    is available when debate context is assembled.  The result is also saved
+    to ``sector_intelligence_{symbol}.json`` so task_prepare_debate_context
+    can load it without re-fetching (deduplication).
+    """
+    try:
+        print(f"  [Sector Specialist] Fetching sector intelligence for {symbol}...")
+        sector_data = _fetch_sector_intelligence(symbol, {})
+        # Persist so debate prep can pick it up without re-fetching
+        state_dir = get_state_dir()
+        out_path = state_dir / f"sector_intelligence_{symbol}.json"
+        save_state_atomic(out_path, sector_data)
+        print(f"  [Sector Specialist] Sector intelligence for {symbol}")
+        return sector_data
+    except Exception as e:
+        print(f"  [Sector Specialist] WARNING: Failed for {symbol}: {e}")
+        return {}
 
 
 def task_check_reflections() -> list[dict]:

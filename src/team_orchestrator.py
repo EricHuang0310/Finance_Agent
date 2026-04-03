@@ -114,17 +114,28 @@ def build_team_prompt(execute: bool = False, notify: bool = True) -> str:
   ```
 
 ### Phase Group 3: Investment Debate (Top-N candidates)
-對每個候選標的，生成 3 個 teammates:
-- Bull Researcher (model: {model_tiers.get('bull-researcher', 'sonnet')})
-- Bear Researcher (model: {model_tiers.get('bear-researcher', 'sonnet')})
-- Research Judge (model: {model_tiers.get('research-judge', 'opus')})
+對每個候選標的:
+
+1. **Sector Intelligence** (Lead直接執行):
+   ```python
+   from src.agents_launcher import task_sector_specialist
+   sector_data = task_sector_specialist(symbol)
+   ```
+   行業情報包含供應鏈動態、板塊輪動信號、競爭格局，將寫入 debate_context。
+
+2. **Debate Prep + Bull/Bear/Judge**:
+   生成 3 個 teammates:
+   - Bull Researcher (model: {model_tiers.get('bull-researcher', 'sonnet')})
+   - Bear Researcher (model: {model_tiers.get('bear-researcher', 'sonnet')})
+   - Research Judge (model: {model_tiers.get('research-judge', 'opus')})
 
 辯論流程:
 ```python
-from src.agents_launcher import task_prepare_debate, task_merge_debates
-# 為每個候選標的準備辯論上下文
+from src.agents_launcher import task_sector_specialist, task_prepare_debate, task_merge_debates
+# 為每個候選標的準備行業情報 + 辯論上下文
 for symbol in top_candidates:
-    context = task_prepare_debate(symbol)
+    sector_data = task_sector_specialist(symbol)  # 行業情報 (Lead直接)
+    context = task_prepare_debate(symbol)           # 辯論上下文 (包含 sector_intelligence)
     # Bull/Bear/Judge teammates 執行辯論
     # ...
 # 合併辯論結果
