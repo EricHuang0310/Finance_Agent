@@ -28,11 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Macro Strategist produces macro_outlook.json with real data (not LLM memory) for bonds, dollar, VIX, and yield curve signals that feed into market regime detection
   4. After execution completes, eod_review.json contains P&L attribution for open positions and thesis-drift flags, and these insights appear in next day's pipeline with confidence decay
   5. Memory corruption no longer fails silently (errors are reported), and concurrent Agent Teams execution does not corrupt the trade log
-**Plans:** 2/7 plans executed
+**Plans:** 4/7 plans executed
 Plans:
 - [x] 01-01-PLAN.md — Memory fixes (MEM-01, MEM-04) + atomic write utility
 - [x] 01-02-PLAN.md — Strategic role agent specs + model tiers + settings config
-- [ ] 01-03-PLAN.md — Macro Strategist + CIO task functions
+- [x] 01-03-PLAN.md — Macro Strategist + CIO task functions
 - [x] 01-04-PLAN.md — EOD Review task function + confidence decay
 - [ ] 01-05-PLAN.md — CIO directive cascade + macro regime integration
 - [ ] 01-06-PLAN.md — Standalone pipeline update with new phases
@@ -66,6 +66,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Strategic Oversight & Agent Teams Foundation | 2/7 | In Progress|  |
+| 1. Strategic Oversight & Agent Teams Foundation | 4/7 | In Progress|  |
 | 2. Portfolio Intelligence | 0/TBD | Not started | - |
 | 3. Debate & Execution Enhancement | 0/TBD | Not started | - |

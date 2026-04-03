@@ -17,11 +17,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Strategic Oversight
 
-- [ ] **CIO-01**: CIO agent produces daily_directive.json with trading stance (aggressive/neutral/defensive) and risk_budget_multiplier before any analysis runs
-- [ ] **CIO-02**: CIO has veto power to halt all trading for the day based on macro conditions and risk assessment
+- [x] **CIO-01**: CIO agent produces daily_directive.json with trading stance (aggressive/neutral/defensive) and risk_budget_multiplier before any analysis runs
+- [x] **CIO-02**: CIO has veto power to halt all trading for the day based on macro conditions and risk assessment
 - [ ] **CIO-03**: CIO directive cascades to all downstream agents (Decision Engine reads risk_budget_multiplier, Risk Manager reads trading stance)
-- [ ] **MACRO-01**: Macro Strategist produces macro_outlook.json with cross-asset signals (bonds TLT, dollar UUP, VIX, yield curve) before CIO makes decisions
-- [ ] **MACRO-02**: Macro Strategist uses code-fetched real-time data (not LLM memory) for all market numbers
+- [x] **MACRO-01**: Macro Strategist produces macro_outlook.json with cross-asset signals (bonds TLT, dollar UUP, VIX, yield curve) before CIO makes decisions
+- [x] **MACRO-02**: Macro Strategist uses code-fetched real-time data (not LLM memory) for all market numbers
 - [ ] **MACRO-03**: Macro outlook integrates into existing market regime detection, enriching the narrow SPY-based view
 
 ### Portfolio Intelligence
@@ -91,11 +91,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | TEAMS-03 | Phase 1 | Complete |
 | TEAMS-04 | Phase 1 | Pending |
 | TEAMS-05 | Phase 1 | Pending |
-| CIO-01 | Phase 1 | Pending |
-| CIO-02 | Phase 1 | Pending |
+| CIO-01 | Phase 1 | Complete |
+| CIO-02 | Phase 1 | Complete |
 | CIO-03 | Phase 1 | Pending |
-| MACRO-01 | Phase 1 | Pending |
-| MACRO-02 | Phase 1 | Pending |
+| MACRO-01 | Phase 1 | Complete |
+| MACRO-02 | Phase 1 | Complete |
 | MACRO-03 | Phase 1 | Pending |
 | PORT-01 | Phase 2 | Pending |
 | PORT-02 | Phase 2 | Pending |
