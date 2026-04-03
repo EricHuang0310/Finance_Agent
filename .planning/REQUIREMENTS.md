@@ -44,9 +44,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Execution Optimization
 
-- [ ] **EXEC-01**: Execution Strategist recommends order type (market, limit, bracket, TWAP) based on volatility and liquidity
-- [ ] **EXEC-02**: Execution Strategist produces execution_plan.json consumed by Executor agent
-- [ ] **EXEC-03**: Execution Strategist tracks estimated vs actual fill quality for learning
+- [x] **EXEC-01**: Execution Strategist recommends order type (market, limit, bracket, TWAP) based on volatility and liquidity
+- [x] **EXEC-02**: Execution Strategist produces execution_plan.json consumed by Executor agent
+- [x] **EXEC-03**: Execution Strategist tracks estimated vs actual fill quality for learning
 
 ### Memory System
 
@@ -106,9 +106,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | SECT-01 | Phase 3 | Complete |
 | SECT-02 | Phase 3 | Complete |
 | SECT-03 | Phase 3 | Complete |
-| EXEC-01 | Phase 3 | Pending |
-| EXEC-02 | Phase 3 | Pending |
-| EXEC-03 | Phase 3 | Pending |
+| EXEC-01 | Phase 3 | Complete |
+| EXEC-02 | Phase 3 | Complete |
+| EXEC-03 | Phase 3 | Complete |
 | MEM-01 | Phase 1 | Complete |
 | MEM-02 | Phase 2 | Complete |
 | MEM-03 | Phase 3 | Pending |
