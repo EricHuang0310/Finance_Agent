@@ -133,10 +133,17 @@ merged = task_merge_debates(candidates)
 
 辯論完成後關閉所有辯論 teammates。
 
-### Phase Group 4: Risk + Execution
+### Phase Group 4: Risk + Portfolio Optimization + Execution
 - Risk Manager (model: {model_tiers.get('risk-manager', 'haiku')}):
   `from src.agents_launcher import task_risk_manager; assessed = task_risk_manager(candidates)`
   **Risk Manager 失敗 = 硬停止，不執行任何交易 (D-12)**
+  完成後關閉此 teammate。
+
+- Portfolio Strategist (model: {model_tiers.get('portfolio-strategist', 'sonnet')}):
+  `from src.agents_launcher import task_portfolio_strategist; assessed = task_portfolio_strategist(assessed)`
+  讀取: Risk Manager 的 assessed trades + 現有 Alpaca 持倉
+  寫入: `{state_dir}/portfolio_construction.json`
+  Portfolio Strategist 失敗 **不是** 硬停止 -- 繼續使用 risk-assessed trades (D-12)
   完成後關閉此 teammate。
 
 {"- Executor (model: " + model_tiers.get('executor', 'haiku') + "):" if execute else "- [執行已跳過 -- 分析模式]"}
@@ -178,6 +185,7 @@ merged = task_merge_debates(candidates)
 | CIO 失敗 | 使用預設方針 (neutral, multiplier=1.0) |
 | 分析師失敗 | 跳過該分析師，繼續 |
 | Risk Manager 失敗 | **硬停止**，不執行任何交易 |
+| Portfolio Strategist 失敗 | 繼續使用 risk-assessed trades（無相關性優化） |
 | Reporter/EOD/Reflection 失敗 | 跳過，pipeline 仍算成功 |
 
 ## 執行模式
