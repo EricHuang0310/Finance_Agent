@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Macro Strategist produces macro_outlook.json with real data (not LLM memory) for bonds, dollar, VIX, and yield curve signals that feed into market regime detection
   4. After execution completes, eod_review.json contains P&L attribution for open positions and thesis-drift flags, and these insights appear in next day's pipeline with confidence decay
   5. Memory corruption no longer fails silently (errors are reported), and concurrent Agent Teams execution does not corrupt the trade log
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans executed
 Plans:
 - [x] 01-01-PLAN.md — Memory fixes (MEM-01, MEM-04) + atomic write utility
 - [x] 01-02-PLAN.md — Strategic role agent specs + model tiers + settings config
@@ -46,7 +46,11 @@ Plans:
   1. Before new positions are approved, portfolio_construction.json exists showing cross-position correlation analysis and sizing adjustments
   2. Portfolio Strategist runs after Risk Manager and before Executor, rejecting or downsizing positions that would create excessive correlation
   3. Every trade has a structured journal entry with entry/exit prices, P&L, thesis, and outcome tagging stored in the memory system
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — PortfolioStrategist class + agent spec + config + task function (PORT-01, PORT-02)
+- [ ] 02-02-PLAN.md — Pipeline integration: wire into run_full_pipeline() + team_orchestrator (PORT-03)
+- [ ] 02-03-PLAN.md — Trade journal with lifecycle tracking and R-multiple (MEM-02)
 
 ### Phase 3: Debate & Execution Enhancement
 **Goal**: Investment debates include deep sector expertise and trade execution uses intelligent order type selection based on market conditions
@@ -66,6 +70,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Strategic Oversight & Agent Teams Foundation | 6/7 | In Progress|  |
-| 2. Portfolio Intelligence | 0/TBD | Not started | - |
+| 1. Strategic Oversight & Agent Teams Foundation | 7/7 | Complete |  |
+| 2. Portfolio Intelligence | 0/3 | Not started | - |
 | 3. Debate & Execution Enhancement | 0/TBD | Not started | - |
