@@ -32,9 +32,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Feedback Loop
 
-- [ ] **EOD-01**: EOD Review Analyst produces eod_review.json with daily P&L attribution for all open positions
-- [ ] **EOD-02**: EOD Review Analyst identifies positions that changed character since entry (thesis drift)
-- [ ] **EOD-03**: EOD insights feed into next day's pipeline via memory system with confidence decay (1.0 yesterday, 0.5 two days ago, 0.25 three days ago)
+- [x] **EOD-01**: EOD Review Analyst produces eod_review.json with daily P&L attribution for all open positions
+- [x] **EOD-02**: EOD Review Analyst identifies positions that changed character since entry (thesis drift)
+- [x] **EOD-03**: EOD insights feed into next day's pipeline via memory system with confidence decay (1.0 yesterday, 0.5 two days ago, 0.25 three days ago)
 
 ### Debate Enhancement
 
@@ -54,7 +54,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **MEM-02**: Add structured trade journal with entry/exit prices, P&L, thesis, and outcome tagging
 - [ ] **MEM-03**: Add cross-session strategy learning: pattern recognition across trades (which setups work, which fail)
 - [x] **MEM-04**: Fix trade log race condition for concurrent Agent Teams execution
-- [ ] **MEM-05**: EOD review insights integrate into memory with confidence decay
+- [x] **MEM-05**: EOD review insights integrate into memory with confidence decay
 
 ## v2 Requirements
 
@@ -100,9 +100,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | PORT-01 | Phase 2 | Pending |
 | PORT-02 | Phase 2 | Pending |
 | PORT-03 | Phase 2 | Pending |
-| EOD-01 | Phase 1 | Pending |
-| EOD-02 | Phase 1 | Pending |
-| EOD-03 | Phase 1 | Pending |
+| EOD-01 | Phase 1 | Complete |
+| EOD-02 | Phase 1 | Complete |
+| EOD-03 | Phase 1 | Complete |
 | SECT-01 | Phase 3 | Pending |
 | SECT-02 | Phase 3 | Pending |
 | SECT-03 | Phase 3 | Pending |
@@ -113,7 +113,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | MEM-02 | Phase 2 | Pending |
 | MEM-03 | Phase 3 | Pending |
 | MEM-04 | Phase 1 | Complete |
-| MEM-05 | Phase 1 | Pending |
+| MEM-05 | Phase 1 | Complete |
 
 ---
 *Defined: 2026-03-31 from research + user scoping*
