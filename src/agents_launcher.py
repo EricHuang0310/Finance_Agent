@@ -196,6 +196,150 @@ def task_macro_strategist() -> dict:
     return result
 
 
+def get_recent_eod_insights(max_days: int = 3) -> list[dict]:
+    """Load recent EOD reviews with confidence decay.
+
+    Yesterday=1.0, 2 days ago=0.5, 3 days ago=0.25.
+    Used by CIO to inform stance decisions (EOD-03 / MEM-05).
+    """
+    orch = get_orchestrator()
+    decay_cfg = orch.settings.get("eod_review", {}).get("decay_weights", {1: 1.0, 2: 0.5, 3: 0.25})
+    state_base = Path(get_state_dir()).parent  # parent of YYYY-MM-DD dir
+    results = []
+    today = datetime.now().date()
+
+    for days_ago in range(1, max_days + 1):
+        target_date = today - timedelta(days=days_ago)
+        eod_path = state_base / target_date.isoformat() / "eod_review.json"
+        if eod_path.exists():
+            try:
+                with open(eod_path) as f:
+                    eod_data = json.load(f)
+                weight = decay_cfg.get(days_ago, decay_cfg.get(str(days_ago), 0.0))
+                results.append({
+                    "date": target_date.isoformat(),
+                    "weight": weight,
+                    "observations": eod_data.get("observations", []),
+                    "thesis_drift_alerts": eod_data.get("thesis_drift_alerts", []),
+                    "portfolio_summary": eod_data.get("portfolio_summary", {}),
+                })
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return results
+
+
+def task_cio_directive() -> dict:
+    """Produce daily_directive.json with trading stance and risk budget.
+
+    CIO scope is narrow per D-04: sets stance + multiplier only.
+    Does NOT veto individual trades (Risk Manager's job).
+    Goes live from day 1 per D-06.
+    """
+    orch = get_orchestrator()
+    state_dir = get_state_dir()
+    cio_cfg = orch.settings.get("cio", {})
+
+    print("\n" + "=" * 60)
+    print("  CIO - Daily Trading Directive")
+    print("=" * 60)
+
+    # Read inputs per D-05
+    inputs_used = {
+        "macro_outlook_available": False,
+        "yesterday_eod_available": False,
+        "market_regime": "unknown",
+    }
+
+    # 1. Read macro_outlook.json (from Macro Strategist)
+    macro_path = Path(state_dir) / "macro_outlook.json"
+    macro = {}
+    if macro_path.exists():
+        try:
+            with open(macro_path) as f:
+                macro = json.load(f)
+            inputs_used["macro_outlook_available"] = True
+            print(f"  Macro outlook loaded: regime suggestion = {macro.get('macro_regime_suggestion', 'N/A')}")
+        except (json.JSONDecodeError, KeyError):
+            print("  WARNING: Macro outlook file corrupted, proceeding without")
+
+    # 2. Read yesterday's EOD review (with decay)
+    eod_insights = get_recent_eod_insights()
+    if eod_insights:
+        inputs_used["yesterday_eod_available"] = True
+        yesterday = eod_insights[0]
+        print(f"  Yesterday's EOD: P&L={yesterday.get('portfolio_summary', {}).get('total_pnl_today', 'N/A')}")
+        if yesterday.get("thesis_drift_alerts"):
+            print(f"  WARNING: Thesis drift alerts: {len(yesterday['thesis_drift_alerts'])} positions")
+
+    # 3. Get market regime
+    regime_data = orch._detect_market_regime()
+    regime = regime_data.get("regime", "transitional")
+    inputs_used["market_regime"] = regime
+    print(f"  Market regime: {regime}")
+
+    # Apply stance triggers (from Research pitfall 1 prevention)
+    vix_val = macro.get("cross_asset_signals", {}).get("vix", {}).get("value")
+    yield_inverted = macro.get("cross_asset_signals", {}).get("yield_curve", {}).get("inverted")
+    spy_aligned_risk_on = (regime == "risk_on")
+
+    stance_triggers = []
+    halt_trading = False
+
+    # Emergency halt
+    halt_threshold = cio_cfg.get("halt_on_vix_above", 40)
+    if vix_val and vix_val > halt_threshold:
+        halt_trading = True
+        stance_triggers.append(f"VIX={vix_val:.1f} > halt_threshold={halt_threshold}")
+
+    # Determine stance
+    defensive_vix = cio_cfg.get("vix_defensive_threshold", 30)
+    aggressive_vix = cio_cfg.get("vix_aggressive_threshold", 18)
+
+    if halt_trading:
+        trading_stance = "defensive"
+        risk_budget_multiplier = 0.0
+        stance_triggers.append("HALT: all trading suspended")
+    elif vix_val and vix_val > defensive_vix and yield_inverted:
+        trading_stance = "defensive"
+        risk_budget_multiplier = cio_cfg.get("defensive_multiplier", 0.6)
+        stance_triggers.append(f"VIX={vix_val:.1f}>{defensive_vix} AND yield_curve_inverted")
+    elif vix_val and vix_val < aggressive_vix and spy_aligned_risk_on:
+        trading_stance = "aggressive"
+        risk_budget_multiplier = cio_cfg.get("aggressive_multiplier", 1.3)
+        stance_triggers.append(f"VIX={vix_val:.1f}<{aggressive_vix} AND SPY_EMA_risk_on")
+    else:
+        trading_stance = "neutral"
+        risk_budget_multiplier = cio_cfg.get("neutral_multiplier", 1.0)
+        if not stance_triggers:
+            stance_triggers.append("no_trigger_matched -> neutral")
+
+    reasoning = f"Market regime: {regime}. "
+    if vix_val:
+        reasoning += f"VIX at {vix_val:.1f}. "
+    if yield_inverted is not None:
+        reasoning += f"Yield curve {'inverted' if yield_inverted else 'normal'}. "
+    reasoning += f"Stance: {trading_stance} (multiplier: {risk_budget_multiplier})."
+
+    print(f"\n  Stance: {trading_stance} | Multiplier: {risk_budget_multiplier} | Halt: {halt_trading}")
+
+    result = {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "timestamp": datetime.now().isoformat(),
+        "trading_stance": trading_stance,
+        "risk_budget_multiplier": risk_budget_multiplier,
+        "halt_trading": halt_trading,
+        "reasoning": reasoning,
+        "inputs_used": inputs_used,
+        "stance_triggers_met": stance_triggers,
+    }
+
+    output_path = Path(state_dir) / "daily_directive.json"
+    save_state_atomic(output_path, result)
+    print(f"  Wrote daily_directive.json")
+
+    return result
+
+
 def task_symbol_screener() -> dict:
     """Task for Symbol Screener agent. Discovers symbols dynamically."""
     print("🔎 [Symbol Screener] Starting market screening...")
